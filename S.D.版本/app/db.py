@@ -1,0 +1,145 @@
+"""暂存表（SQLite）：逐张留痕、时间序、历史查询、发票代码+号码查重、人工修正回流。
+
+对应会议纪要：
+- 「暂存表不可跳步」：识别结果先入暂存库留痕，再汇总编表；
+- 每张图片一行记录，承担缓存、历史记录与数据追溯功能；
+- 查重：发票代码+号码唯一索引；无号码时退化到文件哈希查重。
+"""
+from __future__ import annotations
+
+import json
+import sqlite3
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+
+from .schemas import InvoiceFields, Record
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    status TEXT NOT NULL DEFAULT 'ok',          -- ok / review / rejected
+    file_name TEXT NOT NULL,
+    file_hash TEXT NOT NULL,
+    invoice_code TEXT NOT NULL DEFAULT '',
+    invoice_number TEXT NOT NULL DEFAULT '',
+    category TEXT NOT NULL DEFAULT '',
+    total_amount REAL,
+    fields_json TEXT NOT NULL,                  -- 完整 InvoiceFields JSON（含 remarks 追溯信息）
+    audit_notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_records_invoice_no
+    ON records(invoice_code, invoice_number)
+    WHERE invoice_number != '';
+CREATE INDEX IF NOT EXISTS idx_records_created ON records(created_at);
+
+CREATE TABLE IF NOT EXISTS corrections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    record_id INTEGER NOT NULL REFERENCES records(id),
+    before_json TEXT NOT NULL,
+    after_json TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+"""
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+class StagingDB:
+    def __init__(self, db_path: Path | str):
+        self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
+        self.conn.executescript(SCHEMA)
+        self.conn.commit()
+
+    def close(self) -> None:
+        self.conn.close()
+
+    # ---- 查重 ----
+    def find_duplicate(self, file_hash: str, invoice_code: str, invoice_number: str) -> Optional[Record]:
+        if invoice_number:
+            row = self.conn.execute(
+                "SELECT * FROM records WHERE invoice_code=? AND invoice_number=?",
+                (invoice_code, invoice_number),
+            ).fetchone()
+            if row:
+                return self._to_record(row)
+        row = self.conn.execute("SELECT * FROM records WHERE file_hash=?", (file_hash,)).fetchone()
+        return self._to_record(row) if row else None
+
+    # ---- 入库（留痕）----
+    def insert(self, *, status: str, file_name: str, file_hash: str,
+               fields: InvoiceFields, audit_notes: str = "") -> Record:
+        now = _now()
+        cur = self.conn.execute(
+            """INSERT INTO records
+               (status, file_name, file_hash, invoice_code, invoice_number,
+                category, total_amount, fields_json, audit_notes, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (status, file_name, file_hash, fields.invoice_code, fields.invoice_number,
+             fields.category, fields.total_amount, json.dumps(fields.to_dict(), ensure_ascii=False),
+             audit_notes, now, now),
+        )
+        self.conn.commit()
+        return self.get(cur.lastrowid)  # type: ignore[return-value]
+
+    def get(self, record_id: int) -> Optional[Record]:
+        row = self.conn.execute("SELECT * FROM records WHERE id=?", (record_id,)).fetchone()
+        return self._to_record(row) if row else None
+
+    def list_records(self, *, limit: int = 200, offset: int = 0,
+                     status: Optional[str] = None) -> list[Record]:
+        sql = "SELECT * FROM records"
+        params: list = []
+        if status:
+            sql += " WHERE status=?"
+            params.append(status)
+        sql += " ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?"
+        params += [limit, offset]
+        return [self._to_record(r) for r in self.conn.execute(sql, params).fetchall()]
+
+    def all_active(self) -> list[Record]:
+        """参与汇总/编表的有效记录（rejected 不计入）。"""
+        rows = self.conn.execute(
+            "SELECT * FROM records WHERE status != 'rejected' ORDER BY created_at ASC, id ASC"
+        ).fetchall()
+        return [self._to_record(r) for r in rows]
+
+    # ---- 人工介入窗口：修正回流 ----
+    def correct(self, record_id: int, new_fields: InvoiceFields, *, new_status: str = "ok") -> Optional[Record]:
+        old = self.get(record_id)
+        if old is None:
+            return None
+        self.conn.execute(
+            "INSERT INTO corrections (record_id, before_json, after_json, created_at) VALUES (?,?,?,?)",
+            (record_id, json.dumps(old.fields.to_dict(), ensure_ascii=False),
+             json.dumps(new_fields.to_dict(), ensure_ascii=False), _now()),
+        )
+        self.conn.execute(
+            """UPDATE records SET status=?, invoice_code=?, invoice_number=?, category=?,
+               total_amount=?, fields_json=?, updated_at=? WHERE id=?""",
+            (new_status, new_fields.invoice_code, new_fields.invoice_number, new_fields.category,
+             new_fields.total_amount, json.dumps(new_fields.to_dict(), ensure_ascii=False),
+             _now(), record_id),
+        )
+        self.conn.commit()
+        return self.get(record_id)
+
+    def list_corrections(self, record_id: int) -> list[dict]:
+        rows = self.conn.execute(
+            "SELECT * FROM corrections WHERE record_id=? ORDER BY id ASC", (record_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    @staticmethod
+    def _to_record(row: sqlite3.Row) -> Record:
+        return Record(
+            id=row["id"], status=row["status"], file_name=row["file_name"],
+            file_hash=row["file_hash"], created_at=row["created_at"], updated_at=row["updated_at"],
+            audit_notes=row["audit_notes"],
+            fields=InvoiceFields(**json.loads(row["fields_json"])),
+        )
