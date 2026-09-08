@@ -14,7 +14,13 @@
     → 每传一张即实时更新并向用户反馈
 ```
 
-## 快速开始
+## 快速开始（一键启动）
+
+- **Windows**：双击 `一键启动.bat` —— 自动检查 Python → 创建虚拟环境 → 安装依赖 → 启动服务并打开浏览器（http://127.0.0.1:8000）。停止：在窗口中按 `Ctrl + C` 或直接关窗。
+- **macOS / Linux**：`bash 一键启动.sh`，流程同上。
+- 仅首次运行需要联网安装依赖；之后双击即秒开。`requirements.txt` 更新后删除 `.venv\.deps_ok` 再启动即可重装。
+
+手动方式：
 
 ```bash
 pip install -r requirements.txt
@@ -34,7 +40,9 @@ python run.py          # 打开 http://127.0.0.1:8000
 
 ```
 S.D.版本/
-├── run.py                  # 本地启动入口
+├── 一键启动.bat            # Windows 双击启动（自动建环境/装依赖/开浏览器）
+├── 一键启动.sh             # macOS / Linux 一键启动
+├── run.py                  # 启动入口（端口检测 + 自动打开浏览器）
 ├── requirements.txt
 ├── .env.example            # 配置模板（双 API 端口）
 ├── app/
