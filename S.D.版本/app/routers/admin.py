@@ -18,7 +18,7 @@ from ..db import StagingDB
 from ..log import read_recent_logs
 from ..services.recognizer import get_recognizer, test_provider
 
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -60,11 +60,20 @@ async def put_config(patch: dict) -> dict:
 
 @router.post("/test-provider")
 async def test_provider_api(body: dict) -> dict:
-    """Token/密钥检测：对指定端口发起真实 /models 调用。"""
+    """Token/密钥检测：对指定端口发起真实 /models 调用。
+
+    body 可附带 api_key / base_url / model —— 检测输入框中尚未保存的新密钥，
+    避免「已改输入框但未保存」时误测旧密钥。
+    """
     provider = str(body.get("provider", "")).lower()
     if provider not in ("qwen", "deepseek", "mock"):
         raise HTTPException(status_code=400, detail="provider 须为 qwen / deepseek / mock")
-    return test_provider(provider)
+    return test_provider(
+        provider,
+        api_key=str(body.get("api_key", "")).strip(),
+        base_url=str(body.get("base_url", "")).strip(),
+        model=str(body.get("model", "")).strip(),
+    )
 
 
 @router.get("/usage")

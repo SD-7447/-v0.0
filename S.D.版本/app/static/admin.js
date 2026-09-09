@@ -42,13 +42,22 @@ $("#saveConfig").addEventListener("click", async () => {
   }
 });
 
-/* ---------- Token 检测 ---------- */
+/* ---------- Token 检测（先测后存：输入框里未保存的 key/模型也参与检测） ---------- */
 document.querySelectorAll("[data-test]").forEach((btn) =>
   btn.addEventListener("click", async () => {
     const provider = btn.dataset.test;
     showTestResult({ ok: true, message: `正在检测 ${provider} …` });
+    const payload = { provider };
+    if (provider === "qwen") {
+      if ($("#qwenKey").value.trim()) payload.api_key = $("#qwenKey").value.trim();
+      if ($("#qwenModel").value.trim()) payload.model = $("#qwenModel").value.trim();
+    }
+    if (provider === "deepseek") {
+      if ($("#dsKey").value.trim()) payload.api_key = $("#dsKey").value.trim();
+      if ($("#dsModel").value.trim()) payload.model = $("#dsModel").value.trim();
+    }
     const data = await (await fetch("/api/admin/test-provider", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
     })).json();
     showTestResult(data);
   })

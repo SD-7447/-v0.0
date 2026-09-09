@@ -4,6 +4,10 @@
 - G-05 识别失败指数退避重试；
 - 管理后台需求：每次调用记录 token 用量 / 延迟 / 成败（last_usage），配置实时读取（改 key 免重启）。
 - 保留会议决策：千问端口（首选视觉）/ DeepSeek 备选（文本环节）/ Mock 演示端口。
+
+v0.2.1：
+- test_provider 支持传入未保存的临时密钥（先检测后保存），并透传服务商错误详情（脱敏）；
+- 重试策略收紧：仅网络错误/5xx 重试，配置错误与 4xx 立即抛出。
 """
 from __future__ import annotations
 
@@ -86,13 +90,24 @@ def _parse_json_object(text: str) -> dict[str, Any]:
 
 
 def _with_retry(call, usage: Usage):
-    """指数退避重试包装：1s → 2s，最多 _MAX_RETRIES 次重试。"""
+    """指数退避重试包装：1s → 2s。
+
+    仅对网络类错误（断连/超时/5xx）重试；配置错误（RuntimeError）、
+    解析错误（ValueError）与 4xx 客户端错误属于永久性失败，立即抛出。
+    """
     last_exc: Exception | None = None
     for attempt in range(_MAX_RETRIES + 1):
         usage.attempts = attempt + 1
         try:
             return call()
-        except (urllib.error.URLError, TimeoutError, RuntimeError, ValueError, KeyError) as exc:
+        except urllib.error.HTTPError as exc:
+            if exc.code < 500:            # 4xx 重试无意义
+                usage.error = f"HTTP {exc.code}"
+                raise
+            last_exc = exc
+            if attempt < _MAX_RETRIES:
+                time.sleep(2 ** attempt)
+        except (urllib.error.URLError, TimeoutError) as exc:
             last_exc = exc
             if attempt < _MAX_RETRIES:
                 time.sleep(2 ** attempt)
@@ -246,18 +261,26 @@ def get_recognizer(provider: str | None = None) -> Recognizer:
     return MockRecognizer()
 
 
-def test_provider(provider: str) -> dict[str, Any]:
-    """Token/密钥检测：对指定端口发起最小化真实调用，返回可用性报告。"""
+def test_provider(provider: str, api_key: str = "", base_url: str = "", model: str = "") -> dict[str, Any]:
+    """Token/密钥检测：对指定端口发起最小化真实调用，返回可用性报告。
+
+    可选传入临时 api_key / base_url / model —— 管理后台「先检测、后保存」：
+    输入框里尚未保存的新密钥也参与检测，避免拿旧密钥误判。
+    """
     cfg = get_settings()
     if provider == "qwen":
-        base, key, model = cfg.qwen_base_url, cfg.qwen_api_key, cfg.qwen_model
+        base = base_url or cfg.qwen_base_url
+        key = api_key or cfg.qwen_api_key
+        model = model or cfg.qwen_model
     elif provider == "deepseek":
-        base, key, model = cfg.deepseek_base_url, cfg.deepseek_api_key, cfg.deepseek_model
+        base = base_url or cfg.deepseek_base_url
+        key = api_key or cfg.deepseek_api_key
+        model = model or cfg.deepseek_model
     else:
         return {"provider": provider, "ok": provider == "mock",
                 "message": "Mock 演示端口无需密钥" if provider == "mock" else "未知端口"}
     if not key:
-        return {"provider": provider, "ok": False, "message": "未配置 API Key"}
+        return {"provider": provider, "ok": False, "message": "未配置 API Key（请先在上方输入或保存）"}
     started = time.monotonic()
     try:
         data = _post(base, key, "/models", None, timeout=20)
@@ -272,7 +295,19 @@ def test_provider(provider: str) -> dict[str, Any]:
     except urllib.error.HTTPError as exc:
         latency = int((time.monotonic() - started) * 1000)
         hint = {401: "密钥无效或已过期", 403: "密钥无权限", 429: "额度不足或被限流"}.get(exc.code, f"HTTP {exc.code}")
-        return {"provider": provider, "ok": False, "latency_ms": latency, "message": f"检测失败：{hint}"}
+        detail = _http_error_detail(exc, key)
+        message = f"检测失败：{hint}" + (f"（服务商返回：{detail}）" if detail else "")
+        return {"provider": provider, "ok": False, "latency_ms": latency, "message": message}
     except Exception as exc:  # noqa: BLE001
         latency = int((time.monotonic() - started) * 1000)
         return {"provider": provider, "ok": False, "latency_ms": latency, "message": f"连接失败：{exc}"}
+
+
+def _http_error_detail(exc: urllib.error.HTTPError, key: str) -> str:
+    """从服务商错误响应体中提取可读原因（并对密钥脱敏）。"""
+    try:
+        body = exc.read().decode("utf-8", errors="replace")
+        detail = (json.loads(body).get("error") or {}).get("message", "") or body[:150]
+    except Exception:  # noqa: BLE001
+        return ""
+    return str(detail).replace(key, "***")[:200]
