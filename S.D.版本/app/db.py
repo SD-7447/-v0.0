@@ -42,6 +42,21 @@ CREATE TABLE IF NOT EXISTS corrections (
     after_json TEXT NOT NULL,
     created_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS api_usage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    provider TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    operation TEXT NOT NULL DEFAULT 'recognize',
+    prompt_tokens INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    latency_ms INTEGER NOT NULL DEFAULT 0,
+    success INTEGER NOT NULL DEFAULT 0,
+    error TEXT NOT NULL DEFAULT '',
+    attempts INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_usage_created ON api_usage(created_at);
 """
 
 
@@ -134,6 +149,55 @@ class StagingDB:
             "SELECT * FROM corrections WHERE record_id=? ORDER BY id ASC", (record_id,)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # ---- API 用量台账（管理后台 token 统计）----
+    def log_usage(self, usage: dict) -> None:
+        self.conn.execute(
+            """INSERT INTO api_usage
+               (provider, model, operation, prompt_tokens, completion_tokens,
+                latency_ms, success, error, attempts, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (usage.get("provider", ""), usage.get("model", ""), usage.get("operation", "recognize"),
+             usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
+             usage.get("latency_ms", 0), 1 if usage.get("success") else 0,
+             usage.get("error", ""), usage.get("attempts", 1), _now()),
+        )
+        self.conn.commit()
+
+    def usage_stats(self, days: int = 30) -> dict:
+        rows = self.conn.execute(
+            """SELECT provider,
+                      COUNT(*) AS calls,
+                      SUM(success) AS successes,
+                      SUM(prompt_tokens) AS prompt_tokens,
+                      SUM(completion_tokens) AS completion_tokens,
+                      ROUND(AVG(latency_ms)) AS avg_latency_ms
+               FROM api_usage
+               WHERE created_at >= datetime('now', ?)
+               GROUP BY provider""",
+            (f"-{days} days",),
+        ).fetchall()
+        by_provider = {r["provider"]: dict(r) for r in rows}
+        recent = self.conn.execute(
+            "SELECT * FROM api_usage ORDER BY id DESC LIMIT 20"
+        ).fetchall()
+        return {
+            "days": days,
+            "by_provider": by_provider,
+            "recent": [dict(r) for r in recent],
+        }
+
+    def stats(self) -> dict:
+        """系统概览（管理后台首页）。"""
+        row = self.conn.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN status='ok' THEN 1 ELSE 0 END) AS ok,
+                      SUM(CASE WHEN status='review' THEN 1 ELSE 0 END) AS review,
+                      SUM(CASE WHEN status='rejected' THEN 1 ELSE 0 END) AS rejected
+               FROM records"""
+        ).fetchone()
+        corrections = self.conn.execute("SELECT COUNT(*) AS c FROM corrections").fetchone()["c"]
+        return {"records": dict(row), "corrections": corrections}
 
     @staticmethod
     def _to_record(row: sqlite3.Row) -> Record:
