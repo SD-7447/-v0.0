@@ -1,0 +1,4 @@
+{"name": "勾稽不符（金额+税额≠价税合计）", "expected": "review",
+ "fields": {"invoice_type": "增值税普通发票", "invoice_number": "22334455", "invoice_date": "2026-09-01",
+            "category": "办公费", "direction": "支出", "payment_method": "现金",
+            "amount": 100.0, "tax_amount": 13.0, "total_amount": 120.0, "confidence": 0.9}}

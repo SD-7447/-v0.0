@@ -1,0 +1,4 @@
+{"name": "模型输出含未知字段（schema 违规）", "expected": "review",
+ "fields": {"invoice_type": "增值税普通发票", "invoice_number": "66778899", "invoice_date": "2026-09-01",
+            "category": "办公费", "direction": "支出", "payment_method": "现金",
+            "total_amount": 45.0, "confidence": 0.9, "神秘字段": "某个值"}}

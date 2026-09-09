@@ -1,0 +1,3 @@
+{"name": "金额缺失（应拒收）", "expected": "rejected",
+ "fields": {"invoice_type": "模糊不清的图片", "invoice_number": "77889900", "invoice_date": "2026-09-01",
+            "category": "办公费", "direction": "支出", "confidence": 0.5}}

@@ -1,0 +1,4 @@
+{"name": "反推税率不在常见档位", "expected": "review",
+ "fields": {"invoice_type": "增值税专用发票", "invoice_number": "55667788", "invoice_date": "2026-09-01",
+            "category": "办公费", "direction": "支出", "payment_method": "银行转账",
+            "amount": 100.0, "tax_amount": 7.7, "total_amount": 107.7, "confidence": 0.9}}

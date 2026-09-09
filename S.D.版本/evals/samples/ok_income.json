@@ -1,0 +1,4 @@
+{"name": "正常收入票（应直接入账）", "expected": "ok",
+ "fields": {"invoice_type": "增值税普通发票", "invoice_number": "87654321", "invoice_date": "2026-09-02",
+            "buyer_name": "某客户公司", "item_name": "产品销售", "category": "主营业务收入", "direction": "收入",
+            "payment_method": "银行转账", "amount": 5000.0, "tax_amount": 650.0, "total_amount": 5650.0, "confidence": 0.91}}

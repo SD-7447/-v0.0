@@ -1,0 +1,4 @@
+{"name": "正常支出票（应直接入账）", "expected": "ok",
+ "fields": {"invoice_type": "增值税专用发票", "invoice_number": "12345678", "invoice_date": "2026-09-01",
+            "seller_name": "某办公用品公司", "item_name": "打印纸", "category": "办公费", "direction": "支出",
+            "payment_method": "银行转账", "amount": 100.0, "tax_amount": 13.0, "total_amount": 113.0, "confidence": 0.93}}

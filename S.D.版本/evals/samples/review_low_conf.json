@@ -1,0 +1,4 @@
+{"name": "低置信度", "expected": "review",
+ "fields": {"invoice_type": "手写收据", "invoice_number": "99887766", "invoice_date": "2026-09-01",
+            "category": "办公费", "direction": "支出", "payment_method": "现金",
+            "total_amount": 58.0, "confidence": 0.42}}
