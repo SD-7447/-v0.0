@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="paper">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<div class="bg"></div>
 
 <header class="topbar glass">
   <div class="brand">
@@ -17,7 +16,11 @@
       <p class="sub">Phase 1 · 拍照 → 识别 → 暂存 → 三表 · 本地优先</p>
     </div>
   </div>
-  <div class="health" id="health">连接中…</div>
+  <div class="top-actions">
+    <span class="health" id="health">连接中…</span>
+    <button class="btn" id="themeToggle" title="切换主题">◐ 主题</button>
+    <a class="btn" href="/admin">⚙ 管理后台</a>
+  </div>
 </header>
 
 <main class="layout">
@@ -44,15 +47,18 @@
       <span id="stmtMeta">—</span>
       <span id="balanceCheck" class="check"></span>
     </div>
-    <table class="stmt" id="stmtTable">
-      <tbody></tbody>
-    </table>
+    <table class="stmt" id="stmtTable"><tbody></tbody></table>
+    <div class="stmt-actions">
+      <button class="btn" onclick="window.print()">🖨 打印报表</button>
+      <a class="btn" href="/api/records/export?format=xlsx">⬇ 导出明细 xlsx</a>
+      <a class="btn" href="/api/records/export?format=csv">⬇ csv</a>
+    </div>
   </section>
 
   <!-- 暂存明细区 -->
   <section class="panel glass wide">
     <div class="panel-head">
-      <h2>暂存明细表 <span class="badge" id="recordCount">0</span></h2>
+      <h2>暂存明细表 <span class="badge" id="recordCount">0</span> <span class="badge warn" id="reviewBadge" style="display:none">0 待复核</span></h2>
       <div class="filters">
         <button class="chip active" data-filter="">全部</button>
         <button class="chip" data-filter="review">待复核</button>
@@ -73,7 +79,21 @@
 
 </main>
 
-<footer class="foot">本地运行 · 数据不出本机 · S.D. 版本 v0.1（Phase 1）</footer>
+<!-- 人工复核窗口（G-15） -->
+<div class="modal-mask" id="modalMask">
+  <div class="modal glass">
+    <h3 id="modalTitle">记录详情</h3>
+    <p class="meta" id="modalMeta"></p>
+    <div class="audit-box" id="modalAudit"></div>
+    <div class="form-grid" id="modalForm"></div>
+    <div class="modal-actions">
+      <button class="btn" id="modalCancel">取消</button>
+      <button class="btn primary" id="modalSave">保存修正并重算三表</button>
+    </div>
+  </div>
+</div>
+
+<footer class="foot">本地运行 · 数据不出本机 · S.D. 版本 v0.2（Phase 1）</footer>
 
 <script src="/static/app.js"></script>
 </body>
