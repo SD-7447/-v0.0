@@ -1,20 +1,60 @@
-/* S.D. 智能财务 · Phase 1 前端逻辑 v2（主题切换 / 复核弹窗 / 实时反馈） */
+/* S.D. 智能财务 · 前端 v3（SPA 路由 / 弹簧过渡 / 微信连接向导） */
 const $ = (s) => document.querySelector(s);
-const dz = $("#dzInner"), fileInput = $("#fileInput"), feed = $("#feed");
-let currentTab = "income", currentFilter = "", lastStatements = null, reviewCount = 0;
+const $$ = (s) => document.querySelectorAll(s);
 
 /* ---------- 主题 ---------- */
-const themeBtn = $("#themeToggle");
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
   localStorage.setItem("sd-theme", t);
 }
-applyTheme(localStorage.getItem("sd-theme") || "paper");
-themeBtn.addEventListener("click", () => {
+applyTheme(localStorage.getItem("sd-theme") || "dark");
+$("#themeToggle").addEventListener("click", () => {
   applyTheme(document.documentElement.dataset.theme === "dark" ? "paper" : "dark");
 });
 
+/* ---------- SPA 路由（方向感弹簧过渡） ---------- */
+const PAGES = ["home", "records", "reports", "connect", "settings"];
+let currentPage = "home", switching = false;
+
+function goTo(page) {
+  if (page === currentPage || switching || !PAGES.includes(page)) return;
+  switching = true;
+  const oldIdx = PAGES.indexOf(currentPage), newIdx = PAGES.indexOf(page);
+  const back = newIdx < oldIdx;
+  const oldEl = $("#page-" + currentPage), newEl = $("#page-" + page);
+
+  $$(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.page === page));
+  oldEl.classList.remove("page-enter", "back");
+  oldEl.classList.add("page-leave");
+  if (back) oldEl.classList.add("back");
+
+  setTimeout(() => {
+    oldEl.classList.remove("active", "page-leave", "back");
+    newEl.classList.add("active");
+    newEl.classList.remove("page-enter", "back");
+    void newEl.offsetWidth;               // 重启动画
+    newEl.classList.add("page-enter");
+    if (back) newEl.classList.add("back");
+    $("#main").scrollTop = 0;
+    currentPage = page;
+    history.replaceState(null, "", "#" + page);
+    onPageShow(page);
+    setTimeout(() => (switching = false), 380);
+  }, 180);                                 // 让旧页面先动出一半，节奏更连贯
+}
+
+$$(".nav-item").forEach((n) => n.addEventListener("click", () => goTo(n.dataset.page)));
+
+function onPageShow(page) {
+  if (page === "home") loadHomeKpis();
+  if (page === "records") loadRecords();
+  if (page === "reports") loadStatements();
+  if (page === "connect") refreshConnStatus();
+  if (page === "settings") { loadConfig(); loadStats(); loadUsage(); loadLogs(); }
+}
+
 /* ---------- 上传 ---------- */
+const dz = $("#dz"), fileInput = $("#fileInput"), feed = $("#feed");
 dz.addEventListener("click", () => fileInput.click());
 dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("over"); });
 dz.addEventListener("dragleave", () => dz.classList.remove("over"));
@@ -42,25 +82,82 @@ async function uploadOne(file) {
     const [cls, icon] = map[data.status] || ["err", "❌"];
     item.querySelector(".dot").className = "dot " + cls;
     item.querySelector("div").innerHTML = `<b>${icon} ${escapeHtml(data.message)}</b> <small>${escapeHtml(file.name)}</small>`;
-    if (data.statements) { lastStatements = data.statements; renderStatements(); }
-    loadRecords();
+    loadHomeKpis();
+    if (currentPage === "records") loadRecords();
+    if (currentPage === "reports") loadStatements();
   } catch (err) {
     item.querySelector(".dot").className = "dot err";
     item.querySelector("div").innerHTML = `<b>❌ 网络错误</b><small>${escapeHtml(String(err))}</small>`;
   }
 }
 
-/* ---------- 三表 ---------- */
-document.querySelectorAll(".tab").forEach((t) =>
+async function loadHomeKpis() {
+  try {
+    const s = await (await fetch("/api/admin/stats")).json();
+    $("#homeKpis").innerHTML = [
+      [s.records.total, "票据总数", ""], [s.records.ok, "已入账", "ok"],
+      [s.records.review, "待复核", "warn"], [s.records.rejected, "已拒收", "err"],
+    ].map(([v, k, c]) => `<div class="kpi"><div class="v ${c}">${v ?? 0}</div><div class="k">${k}</div></div>`).join("");
+  } catch { /* 服务未就绪时静默 */ }
+}
+
+/* ---------- 明细 ---------- */
+let currentFilter = "";
+$$(".filters .chip").forEach((c) =>
+  c.addEventListener("click", () => {
+    $$(".filters .chip").forEach((x) => x.classList.remove("active"));
+    c.classList.add("active");
+    currentFilter = c.dataset.filter;
+    loadRecords();
+  })
+);
+
+const ST_LABEL = { ok: ["已入账", "st-ok"], review: ["待复核", "st-review"], rejected: ["已拒收", "st-rejected"] };
+
+async function loadRecords() {
+  const url = "/api/records" + (currentFilter ? `?status=${currentFilter}` : "");
+  const data = await (await fetch(url)).json();
+  const tbody = $("#recordsTable tbody");
+  tbody.innerHTML = "";
+  let reviews = 0;
+  data.records.forEach((r, i) => {
+    const f = r.fields;
+    if (r.status === "review") reviews++;
+    const [label, cls] = ST_LABEL[r.status] || [r.status, ""];
+    const tr = document.createElement("tr");
+    tr.style.animation = `cardIn .35s cubic-bezier(.34,1.4,.44,1) ${Math.min(i * 30, 300)}ms backwards`;
+    tr.innerHTML = `
+      <td>${r.id}</td>
+      <td>${new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })}</td>
+      <td>${escapeHtml(f.invoice_type || "—")}</td>
+      <td>${escapeHtml(f.invoice_number || "—")}</td>
+      <td>${escapeHtml(f.category || "—")}</td>
+      <td>${escapeHtml(f.direction || "—")}</td>
+      <td class="num">${f.total_amount != null ? "¥ " + f.total_amount.toFixed(2) : "—"}</td>
+      <td><span class="st ${cls}">${label}</span></td>
+      <td><span class="src src-${r.source === "wechat" ? "wechat" : "web"}">${r.source === "wechat" ? "微信" : "网页"}</span></td>
+      <td class="remarks">${escapeHtml(f.remarks || "")}</td>`;
+    tr.addEventListener("click", () => openModal(r));
+    tbody.appendChild(tr);
+  });
+  $("#recordCount").textContent = data.records.length;
+  const rb = $("#reviewBadge");
+  rb.style.display = reviews ? "" : "none";
+  rb.textContent = `${reviews} 待复核`;
+}
+
+/* ---------- 报表 ---------- */
+let currentTab = "income", lastStatements = null;
+const TAB_KEYS = { income: "income_statement", balance: "balance_sheet", cashflow: "cashflow_statement" };
+$$("#page-reports .tabs .chip").forEach((t) =>
   t.addEventListener("click", () => {
-    document.querySelectorAll(".tab").forEach((x) => x.classList.remove("active"));
+    $$("#page-reports .tabs .chip").forEach((x) => x.classList.remove("active"));
     t.classList.add("active");
     currentTab = t.dataset.tab;
     renderStatements();
   })
 );
-
-const TAB_KEYS = { income: "income_statement", balance: "balance_sheet", cashflow: "cashflow_statement" };
+$("#printBtn").addEventListener("click", () => window.print());
 
 function renderStatements() {
   if (!lastStatements) return;
@@ -92,50 +189,7 @@ async function loadStatements() {
   renderStatements();
 }
 
-/* ---------- 暂存明细 ---------- */
-document.querySelectorAll(".chip").forEach((c) =>
-  c.addEventListener("click", () => {
-    document.querySelectorAll(".chip").forEach((x) => x.classList.remove("active"));
-    c.classList.add("active");
-    currentFilter = c.dataset.filter;
-    loadRecords();
-  })
-);
-
-const ST_LABEL = { ok: ["已入账", "st-ok"], review: ["待复核", "st-review"], rejected: ["已拒收", "st-rejected"] };
-
-async function loadRecords() {
-  const url = "/api/records" + (currentFilter ? `?status=${currentFilter}` : "");
-  const data = await (await fetch(url)).json();
-  const tbody = $("#recordsTable tbody");
-  tbody.innerHTML = "";
-  let reviews = 0;
-  data.records.forEach((r) => {
-    const f = r.fields;
-    if (r.status === "review") reviews++;
-    const [label, cls] = ST_LABEL[r.status] || [r.status, ""];
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.id}</td>
-      <td>${new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })}</td>
-      <td>${escapeHtml(f.invoice_type || "—")}</td>
-      <td>${escapeHtml(f.invoice_number || "—")}</td>
-      <td>${escapeHtml(f.category || "—")}</td>
-      <td>${escapeHtml(f.direction || "—")}</td>
-      <td class="num">${f.total_amount != null ? "¥ " + f.total_amount.toFixed(2) : "—"}</td>
-      <td><span class="st ${cls}">${label}</span></td>
-      <td><span class="src src-${r.source === "wechat" ? "wechat" : "web"}">${r.source === "wechat" ? "微信" : "网页"}</span></td>
-      <td class="remarks">${escapeHtml(f.remarks || "")}</td>`;
-    tr.addEventListener("click", () => openModal(r));
-    tbody.appendChild(tr);
-  });
-  $("#recordCount").textContent = data.records.length;
-  const rb = $("#reviewBadge");
-  rb.style.display = reviews ? "" : "none";
-  rb.textContent = `${reviews} 待复核`;
-}
-
-/* ---------- 人工复核弹窗（G-15） ---------- */
+/* ---------- 复核弹窗 ---------- */
 const EDITABLE = [
   ["invoice_type", "发票/票据类型"], ["invoice_number", "发票号码"], ["invoice_date", "开票日期(YYYY-MM-DD)"],
   ["seller_name", "销售方名称"], ["buyer_name", "购买方名称"], ["item_name", "货物或服务名称"],
@@ -148,7 +202,7 @@ function openModal(r) {
   editingId = r.id;
   const f = r.fields;
   $("#modalTitle").textContent = `记录 #${r.id} · ${r.file_name}`;
-  $("#modalMeta").textContent = `入库 ${new Date(r.created_at).toLocaleString("zh-CN")} · 状态 ${r.status} · 置信度 ${(f.confidence ?? 0).toFixed(2)}`;
+  $("#modalMeta").textContent = `入库 ${new Date(r.created_at).toLocaleString("zh-CN")} · 状态 ${r.status} · 来源 ${r.source === "wechat" ? "微信" : "网页"} · 置信度 ${(f.confidence ?? 0).toFixed(2)}`;
   const notes = [r.audit_notes, f.validation_notes].filter(Boolean).join("；");
   $("#modalAudit").textContent = notes ? "审计提示：" + notes : "";
   const form = $("#modalForm");
@@ -174,12 +228,16 @@ function openModal(r) {
   $("#modalMask").classList.add("open");
 }
 
-$("#modalCancel").addEventListener("click", () => $("#modalMask").classList.remove("open"));
-$("#modalMask").addEventListener("click", (e) => { if (e.target.id === "modalMask") $("#modalMask").classList.remove("open"); });
+function closeMask(mask) {
+  mask.classList.add("closing");
+  setTimeout(() => mask.classList.remove("open", "closing"), 300);
+}
+$("#modalCancel").addEventListener("click", () => closeMask($("#modalMask")));
+$("#modalMask").addEventListener("click", (e) => { if (e.target.id === "modalMask") closeMask($("#modalMask")); });
 
 $("#modalSave").addEventListener("click", async () => {
   const updates = {};
-  document.querySelectorAll("#modalForm [data-key]").forEach((el) => {
+  $$("#modalForm [data-key]").forEach((el) => {
     const k = el.dataset.key;
     const v = el.value.trim();
     if (["amount", "tax_amount", "total_amount"].includes(k)) {
@@ -192,29 +250,259 @@ $("#modalSave").addEventListener("click", async () => {
   const data = await resp.json();
   if (resp.ok) {
     addFeed("修正", "ok", "✅", data.message);
-    if (data.statements) { lastStatements = data.statements; renderStatements(); }
-    $("#modalMask").classList.remove("open");
-    loadRecords();
+    closeMask($("#modalMask"));
+    loadRecords(); loadHomeKpis();
   } else {
     $("#modalAudit").textContent = "保存失败：" + (data.detail || data.message || "未知错误");
   }
 });
 
-/* ---------- 健康检查 ---------- */
-async function ping() {
-  try {
-    const h = await (await fetch("/api/health")).json();
-    const el = $("#health");
-    el.textContent = `● 正常 · 端口：${h.recognizer}`;
-    el.classList.add("on");
-  } catch {
-    $("#health").textContent = "○ 服务未连接";
+/* ---------- 微信连接：状态 + 向导 ---------- */
+const STEP_DEFS = [
+  { key: "node", name: "Node.js 环境", desc: '转发脚本运行环境（≥ 18）。未安装：到 <code>nodejs.org</code> 下载 LTS 版。' },
+  { key: "gateway", name: "OpenClaw Gateway 常驻", desc: '运行 <code>openclaw gateway</code> 保持常驻。未装 ClawBot 插件：执行 <code>npx -y @tencent-weixin/openclaw-weixin-cli@latest install</code>，并用微信（iOS ≥ 8.0.70）扫码绑定。' },
+  { key: "token", name: "令牌配对（BOT_TOKEN）", desc: '在本页输入令牌保存后，于 Gateway 机器设置环境变量 <code>SD_BOT_TOKEN</code> 为同一值。' },
+];
+const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m4 12.5 5 5L20 6.5"/></svg>';
+
+function renderSteps(container, steps, { wizard = false } = {}) {
+  const el = typeof container === "string" ? $(container) : container;
+  el.innerHTML = "";
+  const firstFail = STEP_DEFS.findIndex((s) => !steps[s.key]);
+  STEP_DEFS.forEach((s, i) => {
+    const state = steps[s.key] ? "done" : (i === firstFail ? "doing" : "");
+    const div = document.createElement("div");
+    div.className = "step " + state;
+    let action = "";
+    if (wizard && s.key === "token" && !steps.token) {
+      action = `<div class="step-action" style="display:flex;gap:8px">
+        <input id="wizardToken" placeholder="输入令牌（留空则跳过）" style="flex:1">
+        <button class="btn" id="wizardSaveToken">保存</button></div>`;
+    }
+    div.innerHTML = `
+      <div class="step-dot">${steps[s.key] ? CHECK_SVG : i + 1}</div>
+      <div><div class="step-name">${s.name}</div><div class="step-desc">${s.desc}</div>${action}</div>`;
+    el.appendChild(div);
+  });
+  if (wizard && !steps.token) {
+    const btn = $("#wizardSaveToken");
+    if (btn) btn.addEventListener("click", saveWizardToken);
   }
 }
 
+async function saveWizardToken() {
+  const v = $("#wizardToken").value.trim();
+  if (!v) return;
+  await fetch("/api/admin/config", {
+    method: "PUT", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ BOT_TOKEN: v }),
+  });
+  refreshConnStatus();
+}
+
+function renderConnHero(heroSel, titleSel, subSel, st) {
+  const hero = $(heroSel);
+  hero.classList.toggle("ok", st.connected);
+  $(titleSel).textContent = st.connected ? "微信通道已连接" : (st.partial ? "通道可达 · 未加密" : "微信通道未连接");
+  $(subSel).textContent = st.connected
+    ? `累计微信入账 ${st.wechat_count} 张${st.last_wechat_at ? " · 最近 " + new Date(st.last_wechat_at).toLocaleString("zh-CN", { hour12: false }) : ""}`
+    : (st.partial ? "Gateway 在运行，但未配置 BOT_TOKEN，任何本机程序都可上传，建议完成令牌配对" : "按下方步骤完成连接，系统将自动检测");
+}
+
+let connTimer = null;
+
+async function refreshConnStatus() {
+  let st;
+  try {
+    st = await (await fetch("/api/bot/status")).json();
+  } catch {
+    return null;
+  }
+  renderConnHero("#connHero", "#connTitle", "#connSub", st);
+  renderSteps("#connSteps", st.steps);
+  const pill = $("#connPill");
+  pill.classList.toggle("ok", st.connected);
+  pill.classList.toggle("bad", !st.connected);
+  $("#connPillText").textContent = st.connected ? "微信已连接" : "微信未连接";
+  return st;
+}
+
+/* 向导弹窗：打开即开始每 3 秒轮询，连接成功后展示 ✓ 并自动回收 */
+function openWizard() {
+  const mask = $("#connMask");
+  mask.classList.add("open");
+  wizardTick();
+  clearInterval(connTimer);
+  connTimer = setInterval(wizardTick, 3000);
+}
+
+async function wizardTick() {
+  let st;
+  try {
+    st = await (await fetch("/api/bot/status")).json();
+  } catch { return; }
+  renderConnHero("#wizardHero", "#wizardTitle", "#wizardSub", st);
+  if (st.connected) {
+    $("#wizardSub").textContent = "连接成功，弹窗即将自动关闭";
+    renderSteps("#wizardSteps", st.steps, { wizard: true });
+    clearInterval(connTimer);
+    refreshConnStatus();
+    setTimeout(() => closeMask($("#connMask")), 1400);
+  } else {
+    renderSteps("#wizardSteps", st.steps, { wizard: true });
+  }
+}
+
+$("#recheckBtn").addEventListener("click", refreshConnStatus);
+$("#openWizardBtn").addEventListener("click", openWizard);
+$("#wizardRecheck").addEventListener("click", wizardTick);
+$("#wizardLater").addEventListener("click", () => {
+  clearInterval(connTimer);
+  closeMask($("#connMask"));
+  sessionStorage.setItem("sd-conn-dismissed", "1");
+});
+$("#connPill").addEventListener("click", () => goTo("connect"));
+
+/* 启动自检：未连接且本次会话未手动跳过 → 弹出向导 */
+async function bootConnCheck() {
+  if (sessionStorage.getItem("sd-conn-dismissed")) { refreshConnStatus(); return; }
+  const st = await refreshConnStatus();
+  if (st && !st.connected) openWizard();
+}
+
+/* ---------- 设置页 ---------- */
+async function loadConfig() {
+  const data = await (await fetch("/api/admin/config")).json();
+  const c = data.config;
+  $("#cfgProvider").value = c.RECOGNIZER_PROVIDER || "mock";
+  $("#activeRecognizer").value = data.active_recognizer;
+  $("#qwenKey").placeholder = c.QWEN_API_KEY ? `当前：${c.QWEN_API_KEY}（留空保持不变）` : "未配置";
+  $("#qwenModel").value = c.QWEN_MODEL || "";
+  $("#dsKey").placeholder = c.DEEPSEEK_API_KEY ? `当前：${c.DEEPSEEK_API_KEY}（留空保持不变）` : "未配置";
+  $("#dsModel").value = c.DEEPSEEK_MODEL || "";
+  $("#botToken").placeholder = c.BOT_TOKEN ? `当前：${c.BOT_TOKEN}（留空保持不变）` : "未配置（微信上传不鉴权）";
+}
+
+$("#saveConfig").addEventListener("click", async () => {
+  const patch = { RECOGNIZER_PROVIDER: $("#cfgProvider").value };
+  if ($("#qwenKey").value.trim()) patch.QWEN_API_KEY = $("#qwenKey").value.trim();
+  if ($("#qwenModel").value.trim()) patch.QWEN_MODEL = $("#qwenModel").value.trim();
+  if ($("#dsKey").value.trim()) patch.DEEPSEEK_API_KEY = $("#dsKey").value.trim();
+  if ($("#dsModel").value.trim()) patch.DEEPSEEK_MODEL = $("#dsModel").value.trim();
+  if ($("#botToken").value.trim()) patch.BOT_TOKEN = $("#botToken").value.trim();
+  const resp = await fetch("/api/admin/config", {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+  });
+  const data = await resp.json();
+  if (resp.ok) {
+    $("#qwenKey").value = ""; $("#dsKey").value = ""; $("#botToken").value = "";
+    loadConfig();
+    showTestResult({ ok: true, message: `已保存，当前生效端口：${data.active_recognizer}` });
+  } else {
+    showTestResult({ ok: false, message: "保存失败：" + (data.detail || "") });
+  }
+});
+
+$$("[data-test]").forEach((btn) =>
+  btn.addEventListener("click", async () => {
+    const provider = btn.dataset.test;
+    showTestResult({ ok: true, message: `正在检测 ${provider} …` });
+    const payload = { provider };
+    if (provider === "qwen") {
+      if ($("#qwenKey").value.trim()) payload.api_key = $("#qwenKey").value.trim();
+      if ($("#qwenModel").value.trim()) payload.model = $("#qwenModel").value.trim();
+    }
+    if (provider === "deepseek") {
+      if ($("#dsKey").value.trim()) payload.api_key = $("#dsKey").value.trim();
+      if ($("#dsModel").value.trim()) payload.model = $("#dsModel").value.trim();
+    }
+    const data = await (await fetch("/api/admin/test-provider", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+    })).json();
+    showTestResult(data);
+  })
+);
+
+function showTestResult(data) {
+  const div = document.createElement("div");
+  div.className = "test-result " + (data.ok ? "ok" : "bad");
+  let extra = "";
+  if (data.latency_ms != null) extra += ` · ${data.latency_ms}ms`;
+  if (data.model_available === true) extra += ` · 模型 ${data.model} 可用`;
+  if (data.model_available === false) extra += ` · ⚠ 模型 ${data.model} 不在可用列表`;
+  div.textContent = `${data.ok ? "✅" : "❌"} [${data.provider || ""}] ${data.message}${extra}`;
+  $("#testResults").prepend(div);
+}
+
+async function loadStats() {
+  const s = await (await fetch("/api/admin/stats")).json();
+  $("#kpis").innerHTML = [
+    [s.records.total, "票据总数"], [s.records.ok, "已入账"], [s.records.review, "待复核"],
+    [s.records.rejected, "已拒收"], [s.corrections, "人工修正"],
+  ].map(([v, k]) => `<div class="kpi"><div class="v">${v}</div><div class="k">${k}</div></div>`).join("");
+  $("#sysKv").innerHTML = [
+    ["系统版本", "v" + s.version], ["Python", s.python], ["识别端口", s.active_recognizer],
+    ["数据库大小", fmtBytes(s.storage.db_bytes)], ["图片归档", fmtBytes(s.storage.upload_bytes)],
+  ].map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("");
+}
+
+async function loadUsage() {
+  const u = await (await fetch("/api/admin/usage")).json();
+  const tbody = $("#usageTable tbody");
+  tbody.innerHTML = "";
+  Object.entries(u.by_provider).forEach(([p, r]) => {
+    tbody.innerHTML += `<tr><td>${p}</td><td>${r.calls}</td><td>${r.successes}</td>
+      <td>${r.prompt_tokens}</td><td>${r.completion_tokens}</td><td>${r.avg_latency_ms}ms</td></tr>`;
+  });
+  if (!tbody.innerHTML) tbody.innerHTML = `<tr><td colspan="6" style="color:var(--sub)">暂无调用记录</td></tr>`;
+  const rt = $("#recentTable tbody");
+  rt.innerHTML = "";
+  u.recent.forEach((r) => {
+    rt.innerHTML += `<tr><td>${(r.created_at || "").slice(5, 19).replace("T", " ")}</td><td>${r.provider}</td>
+      <td>${r.model || "—"}</td><td>${r.prompt_tokens + r.completion_tokens}</td>
+      <td>${r.latency_ms}ms</td><td>${r.success ? "✓" : "✗ " + escapeHtml(r.error.slice(0, 30))}</td></tr>`;
+  });
+  if (!rt.innerHTML) rt.innerHTML = `<tr><td colspan="6" style="color:var(--sub)">暂无记录</td></tr>`;
+}
+
+async function loadLogs() {
+  const d = await (await fetch("/api/admin/logs?lines=120")).json();
+  $("#logBox").textContent = d.lines.length ? d.lines.join("\n") : "暂无日志";
+}
+$("#refreshLogs").addEventListener("click", loadLogs);
+
+$("#clearBtn").addEventListener("click", async () => {
+  if (!confirm("确认清空暂存表？全部票据记录与修正历史将被删除！")) return;
+  if (!confirm("二次确认：此操作不可撤销，原图归档会保留。仍要清空吗？")) return;
+  const resp = await fetch("/api/admin/data/records?confirm=" + encodeURIComponent("清空"), { method: "DELETE" });
+  const data = await resp.json();
+  alert(data.message || data.detail || "完成");
+  loadStats(); loadUsage(); loadLogs(); loadHomeKpis();
+});
+
+/* ---------- 工具 ---------- */
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(2) + " MB";
+}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-ping(); loadStatements(); loadRecords();
-setInterval(() => { loadStatements(); loadRecords(); }, 30000);
+/* ---------- 启动 ---------- */
+const initial = location.hash.slice(1);
+if (PAGES.includes(initial) && initial !== "home") {
+  $("#page-home").classList.remove("active");
+  $("#page-" + initial).classList.add("active");
+  $$(".nav-item").forEach((n) => n.classList.toggle("active", n.dataset.page === initial));
+  currentPage = initial;
+  onPageShow(initial);
+}
+loadHomeKpis();
+refreshConnStatus();
+bootConnCheck();
+setInterval(() => {
+  if (currentPage === "records") loadRecords();
+  if (currentPage === "reports") loadStatements();
+}, 30000);
