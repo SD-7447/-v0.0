@@ -6,7 +6,8 @@
 1. 配置 BOT_TOKEN 后，错误令牌 → 403，正确令牌 → 200 且入账；
 2. 入账记录来源标记为 wechat；
 3. 空文件 → 400，不支持的文件类型 → 422；
-4. 未配置 BOT_TOKEN 时放行（仅本机使用场景）。
+4. 未配置 BOT_TOKEN 时放行（仅本机使用场景）；
+5. 连接自检：status 汇总 + ping 令牌回环。
 """
 import os
 import sys
@@ -66,8 +67,24 @@ def main() -> None:
         r = pipe.process_upload(make_image(b"c"), "c.jpg", source="web")
         assert r.record.source == "web"
 
+        # 5) 连接自检：status 汇总 + ping 令牌回环
+        bot.bind(pipe, db)
+        st = bot.build_status()
+        assert st["wechat_count"] == 2 and st["last_wechat_at"], st
+        assert st["upload_endpoint"] == "/api/bot/upload"
+        assert set(st["steps"]) == {"node", "gateway", "token"}
+        # 未配置令牌：ping 放行但不加密
+        code, body = bot.handle_ping("")
+        assert code == 200 and body["secured"] is False, body
+        # 配置令牌后：错 → 403，对 → 200
+        os.environ["BOT_TOKEN"] = "t1"
+        assert bot.handle_ping("bad")[0] == 403
+        assert bot.handle_ping("t1") == (200, {"ok": True, "secured": True,
+                                                "reply": "✅ 令牌配对成功，通道已加密"})
+        os.environ.pop("BOT_TOKEN", None)
+
         db.close()
-    print("✅ 微信 Bot 通道自测通过（令牌鉴权 / 来源标记 / 类型拦截 / 放行模式）")
+    print("✅ 微信 Bot 通道自测通过（令牌鉴权 / 来源标记 / 类型拦截 / 放行模式 / 连接自检）")
 
 
 if __name__ == "__main__":
