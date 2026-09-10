@@ -14,7 +14,7 @@
     <span class="logo">S.D.</span>
     <div>
       <div class="brand-name">智能财务</div>
-      <div class="brand-sub">Phase 1 · v0.4</div>
+      <div class="brand-sub">Phase 1 · v0.6</div>
     </div>
   </div>
   <div class="nav" id="nav">
@@ -58,7 +58,7 @@
     <p class="page-sub">拍张照，剩下的交给系统 · 数据不出本机</p>
 
     <div class="card">
-      <div class="dz" id="dz">
+      <div class="dz" id="dz" tabindex="0" role="button" aria-label="上传票据图片">
         <div class="dz-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6.5 9.5 12 4l5.5 5.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         </div>
@@ -80,9 +80,14 @@
     <h1 class="page-title">明细</h1>
     <p class="page-sub">暂存表 · 逐张留痕 · 点击任意记录可人工修正</p>
     <div class="card">
-      <div class="card-title" style="justify-content:space-between">
+      <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
         <span>暂存明细 <span class="badge" id="recordCount">0</span> <span class="badge warn" id="reviewBadge" style="display:none">0 待复核</span></span>
-        <span class="filters">
+        <span class="filters" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="search" id="searchWrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/></svg>
+            <input id="searchInput" placeholder="搜索发票号码 / 科目 / 备注" aria-label="搜索明细">
+            <button class="clear" id="searchClear" aria-label="清除搜索">✕</button>
+          </span>
           <button class="chip active" data-filter="">全部</button>
           <button class="chip" data-filter="review">待复核</button>
           <button class="chip" data-filter="ok">已入账</button>
@@ -98,6 +103,7 @@
           <tbody></tbody>
         </table>
       </div>
+      <div id="recordsEmpty"></div>
       <div class="stmt-actions">
         <a class="btn" href="/api/records/export?format=xlsx">导出 xlsx</a>
         <a class="btn" href="/api/records/export?format=csv">导出 csv</a>
@@ -120,6 +126,7 @@
         <span id="balanceCheck" class="check"></span>
       </div>
       <table class="stmt" id="stmtTable"><tbody></tbody></table>
+      <div id="stmtEmpty"></div>
       <div class="stmt-actions">
         <button class="btn" id="printBtn">打印报表</button>
       </div>
