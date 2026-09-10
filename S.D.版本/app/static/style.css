@@ -26,6 +26,7 @@
   --warn:#ffd60a; --warn-soft:rgba(255,214,10,.13); --warn-ink:#000000;
   --err:#ff453a; --err-soft:rgba(255,69,58,.14);
   --wechat:#07c160;
+  --glass:rgba(28,28,30,.55);                    /* Liquid Glass 近似（导航层，原型变量） */
   color-scheme:dark;
 }
 
@@ -39,6 +40,7 @@
   --warn:#8f5e0e; --warn-soft:rgba(143,94,14,.12); --warn-ink:#ffffff;
   --err:#c0392b; --err-soft:rgba(192,57,43,.10);
   --wechat:#07c160;
+  --glass:rgba(255,255,255,.60);                   /* Liquid Glass 近似（导航层，原型变量） */
   color-scheme:light;
 }
 
@@ -52,7 +54,9 @@ body{
 /* ============ 侧边栏 ============ */
 .sidebar{
   position:fixed;inset:0 auto 0 0;width:var(--sidebar-w);z-index:20;
-  background:var(--sidebar);border-right:1px solid var(--hairline);
+  background:var(--glass);
+  backdrop-filter:blur(28px) saturate(1.8);-webkit-backdrop-filter:blur(28px) saturate(1.8);
+  border-right:1px solid var(--hairline);
   display:flex;flex-direction:column;padding:20px 12px 16px;
 }
 .brand{display:flex;align-items:center;gap:10px;padding:2px 10px 18px}
@@ -100,9 +104,9 @@ body{
 
 /* ============ 主区与页面 ============ */
 .main{
-  margin-left:var(--sidebar-w);height:100vh;overflow-y:auto;position:relative;
+  height:100vh;overflow-y:auto;position:relative;
 }
-.page{display:none;padding:26px 28px 48px;max-width:980px}
+.page{display:none;padding:26px 28px 48px calc(var(--sidebar-w) + 28px);max-width:calc(980px + var(--sidebar-w))}
 .page.active{display:block}
 
 .page-leave{animation:pageOut .38s var(--push) forwards}
@@ -309,8 +313,8 @@ table.grid{width:100%;border-collapse:collapse;font-size:13px}
   .btn,.chip{min-height:var(--hit);padding-top:12px;padding-bottom:12px}
   .sidebar-foot{margin:0;flex-direction:row}
   .conn-pill{width:auto;padding:10px;min-height:var(--hit)}
-  .main{margin-left:0;height:calc(100vh - 64px)}
-  .page{padding:20px 16px 40px}
+  .main{height:100vh}
+  .page{padding:20px 16px calc(64px + 44px)}
   .page-title{font-size:28px;line-height:34px}
 }
 
@@ -325,6 +329,45 @@ table.grid{width:100%;border-collapse:collapse;font-size:13px}
   .card,.feed li{animation-name:pageFade}
   .modal{animation-name:pageFade}
   .conn-pill.bad .conn-dot,.feed .run,.step.doing .step-dot{animation:none}
+  .sk::after{animation:none}                 /* 骨架屏静态占位 */
+  .spin{animation-duration:.8s !important;animation-iteration-count:infinite !important}  /* 进度指示保持可感知 */
+}
+
+/* ============ 状态系统：焦点环 / 空状态 / 骨架屏 / 进行中 / 搜索栏 ============ */
+/* 键盘焦点环（HIG keyboards：焦点环清晰、无陷阱） */
+.nav-item:focus-visible,.chip:focus-visible,.btn:focus-visible,.icon-btn:focus-visible,.conn-pill:focus-visible,.dz:focus-visible{
+  outline:none;box-shadow:0 0 0 3px var(--accent-soft),0 0 0 1.5px var(--accent);
+}
+
+/* 空状态：友好符号 + 一句话说明 + 可执行下一步 */
+.empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 20px}
+.empty svg{width:40px;height:40px;margin-bottom:12px;color:var(--faint)}
+.empty .et{font-size:15px;font-weight:600;color:var(--ink);margin-bottom:4px}
+.empty .es{font-size:13px;color:var(--sub);margin-bottom:14px;line-height:1.6;max-width:340px}
+
+/* 骨架屏：与最终布局一致的加载占位 */
+.sk{position:relative;overflow:hidden;background:var(--card-strong);border-radius:8px;height:14px}
+.sk::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(128,128,128,.14),transparent);animation:shimmer 1.4s infinite}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+
+/* 按钮不可用 / 进行中（不可执行时要能看出） */
+.btn:disabled,.btn.busy{opacity:.45;cursor:default;pointer-events:none}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid var(--faint);border-top-color:currentColor;border-radius:50%;animation:rot .8s linear infinite;vertical-align:-2px}
+@keyframes rot{to{transform:rotate(360deg)}}
+
+/* 搜索栏：占位说明范围 · 键入即搜 · 可清除 */
+.search{position:relative;display:inline-flex;align-items:center}
+.search>svg{position:absolute;left:11px;width:15px;height:15px;color:var(--faint);pointer-events:none}
+.search input{width:220px;padding-left:32px;padding-right:30px}
+.search .clear{position:absolute;right:6px;width:22px;height:22px;border:none;border-radius:50%;background:var(--hairline);color:var(--sub);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:11px;padding:0}
+.search .clear:hover{background:var(--line);color:var(--ink)}
+.search.has-text .clear{display:flex}
+@media(max-width:760px){.search input{width:150px}}
+
+/* ============ 无障碍：降低透明度（Liquid Glass 回退为实心材质） ============ */
+@media (prefers-reduced-transparency: reduce){
+  .sidebar{background:var(--card);backdrop-filter:none;-webkit-backdrop-filter:none}
+  .mask{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(0,0,0,.55)}
 }
 
 /* ============ 打印 ============ */
