@@ -1,87 +1,236 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="paper">
+<html lang="zh-CN" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>S.D. 智能财务 · Phase 1</title>
+<title>S.D. 智能财务</title>
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<header class="topbar glass">
+<!-- 侧边栏 -->
+<nav class="sidebar">
   <div class="brand">
     <span class="logo">S.D.</span>
     <div>
-      <h1>智能财务系统</h1>
-      <p class="sub">Phase 1 · 拍照 → 识别 → 暂存 → 三表 · 本地优先</p>
+      <div class="brand-name">智能财务</div>
+      <div class="brand-sub">Phase 1 · v0.4</div>
     </div>
   </div>
-  <div class="top-actions">
-    <span class="health" id="health">连接中…</span>
-    <button class="btn" id="themeToggle" title="切换主题">◐ 主题</button>
-    <a class="btn" href="/admin">⚙ 管理后台</a>
+  <div class="nav" id="nav">
+    <button class="nav-item active" data-page="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M9.5 21v-6h5v6"/></svg>
+      <span>首页</span>
+    </button>
+    <button class="nav-item" data-page="records">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><circle cx="3.5" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="3.5" cy="18" r="1" fill="currentColor" stroke="none"/></svg>
+      <span>明细</span>
+    </button>
+    <button class="nav-item" data-page="reports">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 20V10M12 20V4M20 20v-7"/><path d="M3 20.5h18"/></svg>
+      <span>报表</span>
+    </button>
+    <button class="nav-item" data-page="connect">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z"/><path d="m9 11.5 2 2 4-4.5"/></svg>
+      <span>连接</span>
+    </button>
+    <button class="nav-item" data-page="settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M18.5 5.5l-1.7 1.7M7.2 16.8l-1.7 1.7"/></svg>
+      <span>设置</span>
+    </button>
   </div>
-</header>
+  <div class="sidebar-foot">
+    <button class="conn-pill" id="connPill" title="微信连接状态">
+      <span class="conn-dot"></span><span id="connPillText">检测中…</span>
+    </button>
+    <button class="icon-btn" id="themeToggle">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg>
+      <span>切换主题</span>
+    </button>
+  </div>
+</nav>
 
-<main class="layout">
+<main class="main" id="main">
 
-  <!-- 上传区 -->
-  <section class="panel glass" id="dropzone">
-    <div class="dz-inner" id="dzInner">
-      <div class="dz-icon">⬆</div>
-      <p class="dz-title">拖入票据图片，或点击选择</p>
-      <p class="dz-hint">发票 / 收据 / 银行回单 · 每传一张立即识别并更新三表</p>
-      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+  <!-- 首页 -->
+  <section class="page active" id="page-home">
+    <h1 class="page-title">首页</h1>
+    <p class="page-sub">拍张照，剩下的交给系统 · 数据不出本机</p>
+
+    <div class="card">
+      <div class="dz" id="dz">
+        <div class="dz-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M6.5 9.5 12 4l5.5 5.5"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        </div>
+        <p class="dz-title">拖入票据图片，或点击选择</p>
+        <p class="dz-hint">发票 / 收据 / 银行回单 · 每传一张立即识别并更新三表</p>
+        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      </div>
+      <ul class="feed" id="feed"></ul>
     </div>
-    <ul class="feed" id="feed"></ul>
+
+    <div class="card">
+      <div class="card-title">概览</div>
+      <div class="kpi-row" id="homeKpis"></div>
+    </div>
   </section>
 
-  <!-- 三表区 -->
-  <section class="panel glass">
-    <div class="tabs">
-      <button class="tab active" data-tab="income">利润表</button>
-      <button class="tab" data-tab="balance">资产负债表</button>
-      <button class="tab" data-tab="cashflow">现金流量表</button>
-    </div>
-    <div class="stmt-head">
-      <span id="stmtMeta">—</span>
-      <span id="balanceCheck" class="check"></span>
-    </div>
-    <table class="stmt" id="stmtTable"><tbody></tbody></table>
-    <div class="stmt-actions">
-      <button class="btn" onclick="window.print()">🖨 打印报表</button>
-      <a class="btn" href="/api/records/export?format=xlsx">⬇ 导出明细 xlsx</a>
-      <a class="btn" href="/api/records/export?format=csv">⬇ csv</a>
-    </div>
-  </section>
-
-  <!-- 暂存明细区 -->
-  <section class="panel glass wide">
-    <div class="panel-head">
-      <h2>暂存明细表 <span class="badge" id="recordCount">0</span> <span class="badge warn" id="reviewBadge" style="display:none">0 待复核</span></h2>
-      <div class="filters">
-        <button class="chip active" data-filter="">全部</button>
-        <button class="chip" data-filter="review">待复核</button>
-        <button class="chip" data-filter="ok">已入账</button>
-        <button class="chip" data-filter="rejected">已拒收</button>
+  <!-- 明细 -->
+  <section class="page" id="page-records">
+    <h1 class="page-title">明细</h1>
+    <p class="page-sub">暂存表 · 逐张留痕 · 点击任意记录可人工修正</p>
+    <div class="card">
+      <div class="card-title" style="justify-content:space-between">
+        <span>暂存明细 <span class="badge" id="recordCount">0</span> <span class="badge warn" id="reviewBadge" style="display:none">0 待复核</span></span>
+        <span class="filters">
+          <button class="chip active" data-filter="">全部</button>
+          <button class="chip" data-filter="review">待复核</button>
+          <button class="chip" data-filter="ok">已入账</button>
+          <button class="chip" data-filter="rejected">已拒收</button>
+        </span>
+      </div>
+      <div class="table-wrap">
+        <table class="grid" id="recordsTable">
+          <thead><tr>
+            <th>#</th><th>时间</th><th>类型</th><th>发票号码</th><th>科目</th>
+            <th>方向</th><th>价税合计</th><th>状态</th><th>来源</th><th>备注/其他</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="stmt-actions">
+        <a class="btn" href="/api/records/export?format=xlsx">导出 xlsx</a>
+        <a class="btn" href="/api/records/export?format=csv">导出 csv</a>
       </div>
     </div>
-    <div class="table-wrap">
-      <table class="records" id="recordsTable">
-        <thead><tr>
-          <th>#</th><th>时间</th><th>类型</th><th>发票号码</th><th>科目</th>
-          <th>方向</th><th>价税合计</th><th>状态</th><th>来源</th><th>备注/其他</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
+  </section>
+
+  <!-- 报表 -->
+  <section class="page" id="page-reports">
+    <h1 class="page-title">报表</h1>
+    <p class="page-sub">三大报表 · 每次上传实时重算 · 试算平衡可校验</p>
+    <div class="card">
+      <div class="tabs">
+        <button class="chip active" data-tab="income">利润表</button>
+        <button class="chip" data-tab="balance">资产负债表</button>
+        <button class="chip" data-tab="cashflow">现金流量表</button>
+      </div>
+      <div class="stmt-head">
+        <span id="stmtMeta">—</span>
+        <span id="balanceCheck" class="check"></span>
+      </div>
+      <table class="stmt" id="stmtTable"><tbody></tbody></table>
+      <div class="stmt-actions">
+        <button class="btn" id="printBtn">打印报表</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 连接 -->
+  <section class="page" id="page-connect">
+    <h1 class="page-title">连接</h1>
+    <p class="page-sub">微信 ClawBot 传话筒通道 · 发图即入账</p>
+    <div class="card">
+      <div class="conn-hero" id="connHero">
+        <div class="big-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>
+        </div>
+        <div>
+          <div class="t" id="connTitle">检测中…</div>
+          <div class="s" id="connSub">正在检查连接链路各环节</div>
+        </div>
+      </div>
+      <div class="steps" id="connSteps"></div>
+      <div class="stmt-actions">
+        <button class="btn primary" id="recheckBtn">重新检测</button>
+        <button class="btn" id="openWizardBtn">连接向导</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">说明</div>
+      <p style="font-size:13px;color:var(--sub);line-height:1.8">
+        微信里给 ClawBot 发一张票据照片 → OpenClaw 原样转发到本系统 → 识别入账 → 结果回显微信。
+        详细安装步骤见项目目录 <code>wechat_bot/README.md</code>。
+      </p>
+    </div>
+  </section>
+
+  <!-- 设置 -->
+  <section class="page" id="page-settings">
+    <h1 class="page-title">设置</h1>
+    <p class="page-sub">识别端口 · API 密钥 · 用量 · 系统状态</p>
+
+    <div class="card">
+      <div class="card-title">识别端口与 API 密钥</div>
+      <div class="form-grid">
+        <div>
+          <label>识别端口</label>
+          <select id="cfgProvider">
+            <option value="mock">mock（演示，无需密钥）</option>
+            <option value="qwen">qwen（千问 · 视觉主力）</option>
+            <option value="deepseek">deepseek（备选 · 文本复判）</option>
+          </select>
+        </div>
+        <div><label>当前生效端口</label><input id="activeRecognizer" readonly></div>
+        <div><label>千问 API Key</label><input id="qwenKey" placeholder="sk-…（留空保持不变）"></div>
+        <div><label>千问模型</label><input id="qwenModel"></div>
+        <div><label>DeepSeek API Key</label><input id="dsKey" placeholder="sk-…（留空保持不变）"></div>
+        <div><label>DeepSeek 模型</label><input id="dsModel"></div>
+        <div><label>微信 Bot 令牌（BOT_TOKEN）</label><input id="botToken" placeholder="ClawBot 鉴权口令（留空保持不变）"></div>
+        <div><label>微信上传接口</label><input readonly value="POST /api/bot/upload"></div>
+      </div>
+      <div class="stmt-actions">
+        <button class="btn primary" id="saveConfig">保存并立即生效</button>
+        <button class="btn" data-test="qwen">检测千问</button>
+        <button class="btn" data-test="deepseek">检测 DeepSeek</button>
+        <button class="btn" data-test="mock">检测 Mock</button>
+      </div>
+      <div id="testResults"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">系统状态</div>
+      <div class="kpi-row" id="kpis" style="margin-bottom:12px"></div>
+      <div id="sysKv"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Token 用量（近 30 天）</div>
+      <div class="table-wrap">
+        <table class="grid" id="usageTable">
+          <thead><tr><th>端口</th><th>调用</th><th>成功</th><th>prompt</th><th>completion</th><th>均延迟</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="card-title" style="margin-top:16px">最近调用</div>
+      <div class="table-wrap">
+        <table class="grid" id="recentTable">
+          <thead><tr><th>时间</th><th>端口</th><th>模型</th><th>tokens</th><th>延迟</th><th>结果</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">操作日志</div>
+      <div class="log-box" id="logBox">加载中…</div>
+      <div class="stmt-actions"><button class="btn" id="refreshLogs">刷新日志</button></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">危险操作</div>
+      <div class="danger-zone">
+        <p>清空暂存表将删除全部票据记录与修正历史（原图归档保留在 data/uploads）。此操作不可撤销。</p>
+        <button class="btn danger" id="clearBtn">清空暂存表</button>
+      </div>
     </div>
   </section>
 
 </main>
 
-<!-- 人工复核窗口（G-15） -->
-<div class="modal-mask" id="modalMask">
-  <div class="modal glass">
+<!-- 记录修正弹窗 -->
+<div class="mask" id="modalMask">
+  <div class="modal">
     <h3 id="modalTitle">记录详情</h3>
     <p class="meta" id="modalMeta"></p>
     <div class="audit-box" id="modalAudit"></div>
@@ -93,7 +242,25 @@
   </div>
 </div>
 
-<footer class="foot">本地运行 · 数据不出本机 · S.D. 版本 v0.3（Phase 1 · 微信通道已接入）</footer>
+<!-- 微信连接向导弹窗 -->
+<div class="mask" id="connMask">
+  <div class="modal" style="max-width:520px">
+    <div class="conn-hero" id="wizardHero">
+      <div class="big-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5z"/></svg>
+      </div>
+      <div>
+        <div class="t" id="wizardTitle">连接微信 ClawBot</div>
+        <div class="s" id="wizardSub">按步骤完成连接，系统每 3 秒自动检测</div>
+      </div>
+    </div>
+    <div class="steps" id="wizardSteps"></div>
+    <div class="modal-actions">
+      <button class="btn" id="wizardLater">暂不连接</button>
+      <button class="btn primary" id="wizardRecheck">立即检测</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/app.js"></script>
 </body>
