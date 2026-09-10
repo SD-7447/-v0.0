@@ -21,6 +21,7 @@ async function loadConfig() {
   $("#qwenModel").value = c.QWEN_MODEL || "";
   $("#dsKey").placeholder = c.DEEPSEEK_API_KEY ? `当前：${c.DEEPSEEK_API_KEY}（留空保持不变）` : "未配置";
   $("#dsModel").value = c.DEEPSEEK_MODEL || "";
+  $("#botToken").placeholder = c.BOT_TOKEN ? `当前：${c.BOT_TOKEN}（留空保持不变）` : "未配置（微信上传不鉴权）";
 }
 
 $("#saveConfig").addEventListener("click", async () => {
@@ -29,12 +30,13 @@ $("#saveConfig").addEventListener("click", async () => {
   if ($("#qwenModel").value.trim()) patch.QWEN_MODEL = $("#qwenModel").value.trim();
   if ($("#dsKey").value.trim()) patch.DEEPSEEK_API_KEY = $("#dsKey").value.trim();
   if ($("#dsModel").value.trim()) patch.DEEPSEEK_MODEL = $("#dsModel").value.trim();
+  if ($("#botToken").value.trim()) patch.BOT_TOKEN = $("#botToken").value.trim();
   const resp = await fetch("/api/admin/config", {
     method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
   });
   const data = await resp.json();
   if (resp.ok) {
-    $("#qwenKey").value = ""; $("#dsKey").value = "";
+    $("#qwenKey").value = ""; $("#dsKey").value = ""; $("#botToken").value = "";
     loadConfig();
     showTestResult({ ok: true, message: `已保存，当前生效端口：${data.active_recognizer}` });
   } else {

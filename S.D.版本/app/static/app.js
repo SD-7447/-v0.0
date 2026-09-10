@@ -124,6 +124,7 @@ async function loadRecords() {
       <td>${escapeHtml(f.direction || "—")}</td>
       <td class="num">${f.total_amount != null ? "¥ " + f.total_amount.toFixed(2) : "—"}</td>
       <td><span class="st ${cls}">${label}</span></td>
+      <td><span class="src src-${r.source === "wechat" ? "wechat" : "web"}">${r.source === "wechat" ? "微信" : "网页"}</span></td>
       <td class="remarks">${escapeHtml(f.remarks || "")}</td>`;
     tr.addEventListener("click", () => openModal(r));
     tbody.appendChild(tr);

@@ -45,6 +45,11 @@
       <div><label>千问模型</label><input id="qwenModel"></div>
       <div><label>DeepSeek API Key</label><input id="dsKey" placeholder="sk-…（留空则保持现状）"></div>
       <div><label>DeepSeek 模型</label><input id="dsModel"></div>
+      <div><label>微信 Bot 令牌（BOT_TOKEN）</label><input id="botToken" placeholder="ClawBot 上传鉴权口令（留空保持不变）"></div>
+      <div>
+        <label>微信上传接口</label>
+        <input readonly value="POST /api/bot/upload">
+      </div>
     </div>
     <div class="stmt-actions">
       <button class="btn primary" id="saveConfig">💾 保存并立即生效</button>
