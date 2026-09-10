@@ -1,8 +1,17 @@
-# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.4）
+# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.5）
 
 > 依据《企划书》（基础方针）与 2026-09-07 会议《Phase 1 开发计划》（落地方案）实现。
 > 一句话目标：**做出可用的「壳子 + 全链路」——把票据照片变成三大报表**。
-> v0.4：UI 重构（侧边栏五页 SPA · iOS 弹簧动效 · 扁平 SVG 图标）+ 微信连接链路自检向导。
+> v0.5：按 Apple HIG 官方标准完成合规审计与整改（`documents/designs/hig-audit-v0.4.md`）。
+
+## v0.5 新增（HIG 合规整改）
+
+- **官方色值对齐**：深色主题按 HIG 纵深重构——base `#000` / 卡片 `#1C1C1E` / 浮层 `#2C2C2E`；语义色（label/secondaryLabel/separator/systemBlue·Green·Yellow·Red）全部采用官方参考值；微信品牌色与状态绿解耦为 `#07C160`
+- **对比度达标**：浅色主题小字状态色换用可达性深色变体（ok `#1F7A34` ≈5.4:1、warn `#8F5E0E` ≈5.8:1）；警告徽标配字按主题自适应
+- **触控目标**：侧边栏导航 44px，移动端按钮/筛选 chips/连接状态灯全部 ≥44px；底栏标签字号 10→11px（iOS 最小字号）
+- **排版阶梯**：页面大标题升级 Large Title 34/41，卡片标题 Headline 17/22，脚注 13/18
+- **无障碍**：新增 `prefers-reduced-motion` 降级——系统开启「减弱动态效果」时全部弹簧/位移动画降级为 150ms 淡入淡出
+- 完整审计表（12 项违反项整改 + 对比度核算 + 工效清单 + 4 项有意偏离说明）见 `documents/designs/hig-audit-v0.4.md`
 
 ## v0.4 新增
 
@@ -73,7 +82,7 @@ S.D.版本/
 ├── app/
 │   ├── config.py           # 配置加载（本地优先）
 │   ├── schemas.py          # 预设字段清单 + 数据模型（纯标准库）
-│   ├── db.py               # 暂存表（SQLite）：留痕/查重/修正回流/来源统计
+│   ├── db.py               # 暂存表（SQLite）：留痕/查重/修正回流
 │   ├── main.py             # FastAPI 壳子：上传/明细/复核/三表接口
 │   ├── services/
 │   │   ├── recognizer.py   # 识别端口：qwen / deepseek / mock（可插拔）
@@ -82,11 +91,10 @@ S.D.版本/
 │   │   └── pipeline.py     # 端到端编排：每传一张走完全程并反馈
 │   ├── routers/
 │   │   ├── admin.py        # 管理后台 API（配置/密钥检测/用量/日志）
-│   │   └── bot.py          # 微信 Bot 通道（上传 + 连接自检 status/ping）
-│   └── static/             # v0.4 SPA：侧边栏五页 + 弹簧动效 + 扁平 SVG 图标
+│   │   └── bot.py          # 微信 Bot 上传接口（令牌鉴权 + 回复文本）
+│   └── static/             # Apple 系美术基调前端（毛玻璃/扁平化/即时反馈）
 ├── wechat_bot/             # 微信 ClawBot 传话筒套件（转发脚本/技能/安装指南）
-├── documents/designs/      # 设计系统文档（v3：iOS 舒适感取向）
-└── tests/                  # test_pipeline（端到端）/ test_evals_gate（安全门）/ test_bot_endpoint（微信通道+自检）
+└── tests/                  # test_pipeline（端到端）/ test_evals_gate（安全门）/ test_bot_endpoint（微信通道）
 ```
 
 ## API 一览
