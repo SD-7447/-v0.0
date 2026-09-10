@@ -38,6 +38,7 @@ function goTo(page) {
     $("#main").scrollTop = 0;
     currentPage = page;
     history.replaceState(null, "", "#" + page);
+    localStorage.setItem("sd-page", page);
     onPageShow(page);
     setTimeout(() => (switching = false), 380);
   }, 180);                                 // 让旧页面先动出一半，节奏更连贯
@@ -56,6 +57,11 @@ function onPageShow(page) {
 /* ---------- 上传 ---------- */
 const dz = $("#dz"), fileInput = $("#fileInput"), feed = $("#feed");
 dz.addEventListener("click", () => fileInput.click());
+dz.addEventListener("keydown", (e) => {                    // 键盘可达：Enter/空格触发上传
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
+});
+/* 语义化触觉反馈（HIG haptics：成功轻振 / 失败双振；仅支持的移动设备生效） */
+function haptic(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch { /* 不支持则静默 */ } } }
 dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("over"); });
 dz.addEventListener("dragleave", () => dz.classList.remove("over"));
 dz.addEventListener("drop", (e) => {
@@ -80,12 +86,14 @@ async function uploadOne(file) {
     const data = await resp.json();
     const map = { success: ["ok", "✅"], review: ["warn", "⚠️"], duplicate: ["warn", "🔁"], failed: ["err", "❌"] };
     const [cls, icon] = map[data.status] || ["err", "❌"];
+    haptic(data.status === "success" ? 15 : [40, 60, 40]);
     item.querySelector(".dot").className = "dot " + cls;
     item.querySelector("div").innerHTML = `<b>${icon} ${escapeHtml(data.message)}</b> <small>${escapeHtml(file.name)}</small>`;
     loadHomeKpis();
     if (currentPage === "records") loadRecords();
     if (currentPage === "reports") loadStatements();
   } catch (err) {
+    haptic([40, 60, 40]);
     item.querySelector(".dot").className = "dot err";
     item.querySelector("div").innerHTML = `<b>❌ 网络错误</b><small>${escapeHtml(String(err))}</small>`;
   }
@@ -101,8 +109,8 @@ async function loadHomeKpis() {
   } catch { /* 服务未就绪时静默 */ }
 }
 
-/* ---------- 明细 ---------- */
-let currentFilter = "";
+/* ---------- 明细（搜索 / 筛选 / 空状态 / 骨架屏） ---------- */
+let currentFilter = "", lastRecords = [], searchText = "";
 $$(".filters .chip").forEach((c) =>
   c.addEventListener("click", () => {
     $$(".filters .chip").forEach((x) => x.classList.remove("active"));
@@ -112,35 +120,91 @@ $$(".filters .chip").forEach((c) =>
   })
 );
 
+/* 搜索栏：键入即搜（HIG search-fields：占位说明范围、可清除） */
+const searchInput = $("#searchInput"), searchWrap = $("#searchWrap");
+searchInput.addEventListener("input", () => {
+  searchText = searchInput.value.trim().toLowerCase();
+  searchWrap.classList.toggle("has-text", !!searchText);
+  renderRecords();
+});
+$("#searchClear").addEventListener("click", () => {
+  searchInput.value = ""; searchText = ""; searchWrap.classList.remove("has-text");
+  renderRecords(); searchInput.focus();
+});
+
 const ST_LABEL = { ok: ["已入账", "st-ok"], review: ["待复核", "st-review"], rejected: ["已拒收", "st-rejected"] };
 
+/* 空状态（HIG：友好符号 + 一句话说明 + 可执行下一步） */
+const EMPTY_ICONS = {
+  tray: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13 5.5 5h13L21 13v6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19z"/><path d="M3 13h5.5l1.5 2.5h4L15.5 13H21"/></svg>',
+  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20.5 20.5-4.5-4.5"/><path d="m8.5 8.5 5 5M13.5 8.5l-5 5"/></svg>',
+};
+function emptyState(icon, title, sub, action = "") {
+  return `<div class="empty">${EMPTY_ICONS[icon]}<div class="et">${title}</div><div class="es">${sub}</div>${action}</div>`;
+}
+
+function skRows(cols, n) {
+  return Array.from({ length: n }, () =>
+    `<tr><td colspan="${cols}" style="border-bottom:none;padding:9px 10px"><div class="sk"></div></td></tr>`).join("");
+}
+
 async function loadRecords() {
+  const tbody = $("#recordsTable tbody");
+  $("#recordsTable").style.display = "";
+  $("#recordsEmpty").innerHTML = "";
+  tbody.innerHTML = skRows(10, 6);                    // 骨架占位：与最终布局一致
   const url = "/api/records" + (currentFilter ? `?status=${currentFilter}` : "");
   const data = await (await fetch(url)).json();
+  lastRecords = data.records;
+  renderRecords();
+}
+
+function renderRecords() {
+  const q = searchText;
+  const rows = q
+    ? lastRecords.filter((r) => {
+        const f = r.fields;
+        return [f.invoice_number, f.category, f.remarks, f.invoice_type, f.seller_name, r.file_name]
+          .filter(Boolean).some((v) => String(v).toLowerCase().includes(q));
+      })
+    : lastRecords;
   const tbody = $("#recordsTable tbody");
+  const emptyEl = $("#recordsEmpty");
   tbody.innerHTML = "";
-  let reviews = 0;
-  data.records.forEach((r, i) => {
-    const f = r.fields;
-    if (r.status === "review") reviews++;
-    const [label, cls] = ST_LABEL[r.status] || [r.status, ""];
-    const tr = document.createElement("tr");
-    tr.style.animation = `cardIn .35s cubic-bezier(.34,1.4,.44,1) ${Math.min(i * 30, 300)}ms backwards`;
-    tr.innerHTML = `
-      <td>${r.id}</td>
-      <td>${new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })}</td>
-      <td>${escapeHtml(f.invoice_type || "—")}</td>
-      <td>${escapeHtml(f.invoice_number || "—")}</td>
-      <td>${escapeHtml(f.category || "—")}</td>
-      <td>${escapeHtml(f.direction || "—")}</td>
-      <td class="num">${f.total_amount != null ? "¥ " + f.total_amount.toFixed(2) : "—"}</td>
-      <td><span class="st ${cls}">${label}</span></td>
-      <td><span class="src src-${r.source === "wechat" ? "wechat" : "web"}">${r.source === "wechat" ? "微信" : "网页"}</span></td>
-      <td class="remarks">${escapeHtml(f.remarks || "")}</td>`;
-    tr.addEventListener("click", () => openModal(r));
-    tbody.appendChild(tr);
-  });
-  $("#recordCount").textContent = data.records.length;
+  if (!rows.length) {
+    $("#recordsTable").style.display = "none";
+    emptyEl.innerHTML = q
+      ? emptyState("search", "没有匹配的票据", `没有找到包含「${escapeHtml(searchText)}」的记录，换个关键词或清除搜索。`, `<button class="btn" id="emptyClearSearch">清除搜索</button>`)
+      : emptyState("tray", "暂无票据", "拍张照或拖入票据图片，系统会自动识别并更新三表。", `<button class="btn primary" id="emptyGoUpload">去上传</button>`);
+    const b1 = $("#emptyClearSearch");
+    if (b1) b1.addEventListener("click", () => $("#searchClear").click());
+    const b2 = $("#emptyGoUpload");
+    if (b2) b2.addEventListener("click", () => goTo("home"));
+  } else {
+    $("#recordsTable").style.display = "";
+    emptyEl.innerHTML = "";
+    rows.forEach((r, i) => {
+      const f = r.fields;
+      const [label, cls] = ST_LABEL[r.status] || [r.status, ""];
+      const tr = document.createElement("tr");
+      tr.style.animation = `cardIn .35s cubic-bezier(.34,1.4,.44,1) ${Math.min(i * 30, 300)}ms backwards`;
+      tr.innerHTML = `
+        <td>${r.id}</td>
+        <td>${new Date(r.created_at).toLocaleString("zh-CN", { hour12: false })}</td>
+        <td>${escapeHtml(f.invoice_type || "—")}</td>
+        <td>${escapeHtml(f.invoice_number || "—")}</td>
+        <td>${escapeHtml(f.category || "—")}</td>
+        <td>${escapeHtml(f.direction || "—")}</td>
+        <td class="num">${f.total_amount != null ? "¥ " + f.total_amount.toFixed(2) : "—"}</td>
+        <td><span class="st ${cls}">${label}</span></td>
+        <td><span class="src src-${r.source === "wechat" ? "wechat" : "web"}">${r.source === "wechat" ? "微信" : "网页"}</span></td>
+        <td class="remarks">${escapeHtml(f.remarks || "")}</td>`;
+      tr.addEventListener("click", () => openModal(r));
+      tbody.appendChild(tr);
+    });
+  }
+  $("#recordCount").textContent = rows.length;
+  const reviews = lastRecords.filter((r) => r.status === "review").length;
   const rb = $("#reviewBadge");
   rb.style.display = reviews ? "" : "none";
   rb.textContent = `${reviews} 待复核`;
@@ -161,8 +225,22 @@ $("#printBtn").addEventListener("click", () => window.print());
 
 function renderStatements() {
   if (!lastStatements) return;
-  const lines = lastStatements[TAB_KEYS[currentTab]] || [];
   const tbody = $("#stmtTable tbody");
+  const emptyEl = $("#stmtEmpty");
+  const bc = $("#balanceCheck");
+  /* 空状态：没有票据时给可执行下一步（HIG empty state） */
+  if (!lastStatements.record_count) {
+    $("#stmtTable").style.display = "none";
+    $("#stmtMeta").textContent = "暂无数据";
+    bc.textContent = "";
+    emptyEl.innerHTML = emptyState("tray", "还没有可编制的报表", "上传第一张票据后，三大报表会在这里实时生成。", `<button class="btn primary" id="emptyGoUpload2">去上传</button>`);
+    const b = $("#emptyGoUpload2");
+    if (b) b.addEventListener("click", () => goTo("home"));
+    return;
+  }
+  $("#stmtTable").style.display = "";
+  emptyEl.innerHTML = "";
+  const lines = lastStatements[TAB_KEYS[currentTab]] || [];
   tbody.innerHTML = "";
   lines.forEach((l) => {
     const tr = document.createElement("tr");
@@ -177,7 +255,6 @@ function renderStatements() {
     tbody.appendChild(tr);
   });
   $("#stmtMeta").textContent = `共 ${lastStatements.record_count} 张票据 · 更新于 ${new Date(lastStatements.generated_at).toLocaleTimeString("zh-CN")}`;
-  const bc = $("#balanceCheck");
   if (currentTab === "balance") {
     bc.textContent = lastStatements.balance_check ? "✓ 资产 = 负债 + 所有者权益（试算平衡）" : "✗ 借贷不平衡，请复核";
     bc.className = "check " + (lastStatements.balance_check ? "ok" : "bad");
@@ -185,6 +262,10 @@ function renderStatements() {
 }
 
 async function loadStatements() {
+  const tbody = $("#stmtTable tbody");
+  $("#stmtTable").style.display = "";
+  $("#stmtEmpty").innerHTML = "";
+  tbody.innerHTML = skRows(2, 10);                    // 骨架占位
   lastStatements = await (await fetch("/api/statements")).json();
   renderStatements();
 }
@@ -236,6 +317,8 @@ $("#modalCancel").addEventListener("click", () => closeMask($("#modalMask")));
 $("#modalMask").addEventListener("click", (e) => { if (e.target.id === "modalMask") closeMask($("#modalMask")); });
 
 $("#modalSave").addEventListener("click", async () => {
+  const saveBtn = $("#modalSave");
+  if (saveBtn.classList.contains("busy")) return;
   const updates = {};
   $$("#modalForm [data-key]").forEach((el) => {
     const k = el.dataset.key;
@@ -244,16 +327,27 @@ $("#modalSave").addEventListener("click", async () => {
       updates[k] = v === "" ? null : parseFloat(v);
     } else updates[k] = v;
   });
-  const resp = await fetch(`/api/records/${editingId}`, {
-    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
-  });
-  const data = await resp.json();
-  if (resp.ok) {
-    addFeed("修正", "ok", "✅", data.message);
-    closeMask($("#modalMask"));
-    loadRecords(); loadHomeKpis();
-  } else {
-    $("#modalAudit").textContent = "保存失败：" + (data.detail || data.message || "未知错误");
+  /* 按钮内活动指示（HIG buttons：无需另开弹层），并防重复提交 */
+  saveBtn.classList.add("busy");
+  const origText = saveBtn.textContent;
+  saveBtn.innerHTML = '<span class="spin"></span> 保存中…';
+  try {
+    const resp = await fetch(`/api/records/${editingId}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      addFeed("修正", "ok", "✅", data.message);
+      closeMask($("#modalMask"));
+      loadRecords(); loadHomeKpis();
+    } else {
+      $("#modalAudit").textContent = "保存失败：" + (data.detail || data.message || "未知错误");
+    }
+  } catch (err) {
+    $("#modalAudit").textContent = "保存失败：网络错误，请稍后重试";
+  } finally {
+    saveBtn.classList.remove("busy");
+    saveBtn.textContent = origText;
   }
 });
 
@@ -491,7 +585,8 @@ function escapeHtml(s) {
 }
 
 /* ---------- 启动 ---------- */
-const initial = location.hash.slice(1);
+/* 启动恢复上次页面（HIG launching：重启后恢复之前状态） */
+const initial = location.hash.slice(1) || localStorage.getItem("sd-page") || "home";
 if (PAGES.includes(initial) && initial !== "home") {
   $("#page-home").classList.remove("active");
   $("#page-" + initial).classList.add("active");
