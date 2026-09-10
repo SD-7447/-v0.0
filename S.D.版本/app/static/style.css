@@ -171,6 +171,9 @@ h2{font-size:15.5px;font-weight:700}
 .st-ok{background:var(--ok-soft);color:var(--ok)}
 .st-review{background:var(--warn-soft);color:var(--warn)}
 .st-rejected{background:var(--err-soft);color:var(--err)}
+.src{padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;white-space:nowrap;border:1px solid var(--line);color:var(--sub)}
+.src-wechat{background:#07c1601a;border-color:#07c16055;color:#07a050}
+[data-theme="dark"] .src-wechat{color:#3ecf7a}
 .remarks{color:var(--sub);max-width:200px}
 
 /* ---------- 弹窗（人工复核窗口 G-15） ---------- */
@@ -230,7 +233,7 @@ h2{font-size:15.5px;font-weight:700}
   .dz-inner{padding:30px 14px}
   .btn{padding:10px 16px}           /* 大触控区 */
   .records th:nth-child(2),.records td:nth-child(2),
-  .records th:nth-child(9),.records td:nth-child(9){display:none}  /* 窄屏隐藏时间/备注列 */
+  .records th:nth-child(10),.records td:nth-child(10){display:none}  /* 窄屏隐藏时间/备注列 */
 }
 
 /* ---------- 打印（G-17） ---------- */
