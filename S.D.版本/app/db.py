@@ -207,6 +207,14 @@ class StagingDB:
         corrections = self.conn.execute("SELECT COUNT(*) AS c FROM corrections").fetchone()["c"]
         return {"records": dict(row), "corrections": corrections}
 
+    def source_stats(self, source: str) -> dict:
+        """某来源（web/wechat）的记录数与最近一次入库时间（连接自检用）。"""
+        row = self.conn.execute(
+            "SELECT COUNT(*) AS c, MAX(created_at) AS last_at FROM records WHERE source=?",
+            (source,),
+        ).fetchone()
+        return {"count": row["c"], "last_at": row["last_at"]}
+
     @staticmethod
     def _to_record(row: sqlite3.Row) -> Record:
         return Record(

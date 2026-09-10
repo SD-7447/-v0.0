@@ -1,8 +1,15 @@
-# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.3）
+# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.4）
 
 > 依据《企划书》（基础方针）与 2026-09-07 会议《Phase 1 开发计划》（落地方案）实现。
 > 一句话目标：**做出可用的「壳子 + 全链路」——把票据照片变成三大报表**。
-> v0.3：微信 ClawBot 传话筒通道——微信发图直达本地 WebApp，识别结果回显微信。
+> v0.4：UI 重构（侧边栏五页 SPA · iOS 弹簧动效 · 扁平 SVG 图标）+ 微信连接链路自检向导。
+
+## v0.4 新增
+
+- **UI 重构**：单页应用 + 固定侧边栏（首页/明细/报表/连接/设置），大标题层级，hairline 分隔；页面切换为方向感非线性过渡（推入/推回 380ms 弹簧曲线），弹窗过冲回弹，列表逐项 stagger 进入；图标全部重绘为 1.6px 描边扁平 SVG（不再使用 emoji 功能图标）；深色（默认）/暖纸双主题
+- **微信连接链路重构**：启动时自动调用 `GET /api/bot/status` 自检（Node 环境 → OpenClaw Gateway 端口探活 → BOT_TOKEN 配对三步）；未连接自动弹出分步连接向导（含扫码绑定指引与向导内直接保存令牌），每 3 秒轮询，**检测到连接成功后展示成功态并自动回收弹窗**；「暂不连接」可跳过（本会话内不再弹出）；侧边栏常驻连接状态灯
+- **连接自检接口**：`GET /api/bot/status`（分步状态 + 微信入账统计）、`GET /api/bot/ping`（令牌回环自检，不产生入账记录）
+- **设置页并入主界面**：原管理后台（密钥/检测/用量/日志/危险操作）成为 SPA 一页；旧 `/admin` 页面保留兼容
 
 ## v0.3 新增
 
@@ -66,7 +73,7 @@ S.D.版本/
 ├── app/
 │   ├── config.py           # 配置加载（本地优先）
 │   ├── schemas.py          # 预设字段清单 + 数据模型（纯标准库）
-│   ├── db.py               # 暂存表（SQLite）：留痕/查重/修正回流
+│   ├── db.py               # 暂存表（SQLite）：留痕/查重/修正回流/来源统计
 │   ├── main.py             # FastAPI 壳子：上传/明细/复核/三表接口
 │   ├── services/
 │   │   ├── recognizer.py   # 识别端口：qwen / deepseek / mock（可插拔）
@@ -75,10 +82,11 @@ S.D.版本/
 │   │   └── pipeline.py     # 端到端编排：每传一张走完全程并反馈
 │   ├── routers/
 │   │   ├── admin.py        # 管理后台 API（配置/密钥检测/用量/日志）
-│   │   └── bot.py          # 微信 Bot 上传接口（令牌鉴权 + 回复文本）
-│   └── static/             # Apple 系美术基调前端（毛玻璃/扁平化/即时反馈）
+│   │   └── bot.py          # 微信 Bot 通道（上传 + 连接自检 status/ping）
+│   └── static/             # v0.4 SPA：侧边栏五页 + 弹簧动效 + 扁平 SVG 图标
 ├── wechat_bot/             # 微信 ClawBot 传话筒套件（转发脚本/技能/安装指南）
-└── tests/                  # test_pipeline（端到端）/ test_evals_gate（安全门）/ test_bot_endpoint（微信通道）
+├── documents/designs/      # 设计系统文档（v3：iOS 舒适感取向）
+└── tests/                  # test_pipeline（端到端）/ test_evals_gate（安全门）/ test_bot_endpoint（微信通道+自检）
 ```
 
 ## API 一览
@@ -87,6 +95,8 @@ S.D.版本/
 |---|---|---|
 | POST | `/api/upload` | 上传票据图片 → 识别入账 → 返回最新三表 |
 | POST | `/api/bot/upload` | 微信 Bot 通道上传（字节流 + `X-Bot-Token` 鉴权），返回微信回显文本 |
+| GET | `/api/bot/status` | 微信连接自检（Node/Gateway/令牌 分步状态 + 入账统计） |
+| GET | `/api/bot/ping` | 令牌回环自检（`X-Bot-Token` 头，不产生入账记录） |
 | GET | `/api/records` | 暂存明细（历史查询，支持 `?status=review` 过滤） |
 | GET | `/api/records/{id}` | 单条记录 + 修正历史 |
 | PATCH | `/api/records/{id}` | 人工介入窗口：修正字段，回流留痕，重算三表 |
