@@ -1,8 +1,15 @@
-# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.2）
+# AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.3）
 
 > 依据《企划书》（基础方针）与 2026-09-07 会议《Phase 1 开发计划》（落地方案）实现。
 > 一句话目标：**做出可用的「壳子 + 全链路」——把票据照片变成三大报表**。
-> v0.2：复式记账内核 · 管理后台（API KEY 更换 / Token 检测 / 用量统计）· 人工复核窗口 · 双主题美术升级。
+> v0.3：微信 ClawBot 传话筒通道——微信发图直达本地 WebApp，识别结果回显微信。
+
+## v0.3 新增
+
+- **微信上传通道**：`POST /api/bot/upload`（`app/routers/bot.py`），收字节流 + `X-Bot-Token`/`X-User`/`X-File-Name` 头，令牌鉴权（未配置则放行并记日志），返回带 ✅/⚠️/🔁/❌ 图标的 `reply` 文本直接回显微信
+- **来源标记**：暂存记录新增 `source` 字段（web/wechat，老库自动迁移），明细表「来源」列区分微信/网页上传
+- **传话筒套件**（`wechat_bot/`）：OpenClaw 零依赖转发脚本 `forward_to_webapp.js`、`sd-finance-relay` 技能（明确禁止 AI 侧分析图片）、本地自测 `test_local.js`、完整安装指南 `README.md`（安装 → 扫码 → 配令牌 → 自测 → 排错表）
+- **管理后台**：新增「微信 Bot 令牌（BOT_TOKEN）」配置项与上传接口地址展示
 
 ## v0.2 新增
 
@@ -17,7 +24,7 @@
 ## 全链路
 
 ```
-手机拍照（微信/扣子 Bot，攻关中）─→ 本地 Web App 接收图片
+手机拍照（微信 ClawBot 通道已打通，见 wechat_bot/README.md）─→ 本地 Web App 接收图片
     → 多模态大模型 API 识别（预设字段输出，无则留空，多余信息归入「备注/其他」）
     → 暂存表入库（逐张留痕 · 时间序 · 可查重 · 可追溯）
     → 审计规则（勾稽校验 / 低置信度 → 人工复核队列）
@@ -66,8 +73,12 @@ S.D.版本/
 │   │   ├── audit.py        # 审计规则：勾稽校验/置信度门/人工复核
 │   │   ├── statements.py   # 汇总 + 三表编制（确定性科目映射）
 │   │   └── pipeline.py     # 端到端编排：每传一张走完全程并反馈
+│   ├── routers/
+│   │   ├── admin.py        # 管理后台 API（配置/密钥检测/用量/日志）
+│   │   └── bot.py          # 微信 Bot 上传接口（令牌鉴权 + 回复文本）
 │   └── static/             # Apple 系美术基调前端（毛玻璃/扁平化/即时反馈）
-└── tests/test_pipeline.py  # 端到端自测（Mock 端口，免密钥）
+├── wechat_bot/             # 微信 ClawBot 传话筒套件（转发脚本/技能/安装指南）
+└── tests/                  # test_pipeline（端到端）/ test_evals_gate（安全门）/ test_bot_endpoint（微信通道）
 ```
 
 ## API 一览
@@ -75,6 +86,7 @@ S.D.版本/
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/upload` | 上传票据图片 → 识别入账 → 返回最新三表 |
+| POST | `/api/bot/upload` | 微信 Bot 通道上传（字节流 + `X-Bot-Token` 鉴权），返回微信回显文本 |
 | GET | `/api/records` | 暂存明细（历史查询，支持 `?status=review` 过滤） |
 | GET | `/api/records/{id}` | 单条记录 + 修正历史 |
 | PATCH | `/api/records/{id}` | 人工介入窗口：修正字段，回流留痕，重算三表 |
@@ -98,5 +110,5 @@ S.D.版本/
 ## 已知边界（诚实说明）
 
 - 三表为**小微企业简版口径**（科目→报表行的确定性映射），非完整会计准则实现；
-- 微信 × 扣子 Bot 上传通道为会议列明的攻关项，本版本提供 Web 上传页作为兜底入口；
+- 微信通道依赖微信官方 ClawBot 插件（灰度中，要求 iOS ≥ 8.0.70）与 OpenClaw Gateway 常驻；Web 上传页仍作为兜底入口；
 - Mock 端口仅用于链路演示，正式识别需配置千问 API 密钥。

@@ -27,8 +27,9 @@ EDITABLE_KEYS = {
     "RECOGNIZER_PROVIDER",
     "QWEN_API_KEY", "QWEN_BASE_URL", "QWEN_MODEL",
     "DEEPSEEK_API_KEY", "DEEPSEEK_BASE_URL", "DEEPSEEK_MODEL",
+    "BOT_TOKEN",
 }
-SECRET_KEYS = {"QWEN_API_KEY", "DEEPSEEK_API_KEY"}
+SECRET_KEYS = {"QWEN_API_KEY", "DEEPSEEK_API_KEY", "BOT_TOKEN"}
 
 _DEFAULTS = {
     "RECOGNIZER_PROVIDER": "mock",
@@ -38,6 +39,7 @@ _DEFAULTS = {
     "DEEPSEEK_API_KEY": "",
     "DEEPSEEK_BASE_URL": "https://api.deepseek.com/v1",
     "DEEPSEEK_MODEL": "deepseek-chat",
+    "BOT_TOKEN": "",
     "SD_DB_PATH": str(DATA_DIR / "sd_finance.db"),
     "SD_UPLOAD_DIR": str(DATA_DIR / "uploads"),
     "SD_LOG_DIR": str(DATA_DIR / "logs"),

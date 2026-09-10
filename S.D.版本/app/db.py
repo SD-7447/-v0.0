@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS records (
     total_amount REAL,
     fields_json TEXT NOT NULL,                  -- 完整 InvoiceFields JSON（含 remarks 追溯信息）
     audit_notes TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT 'web',         -- 来源：web（网页上传）/ wechat（微信 ClawBot）
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -69,7 +70,14 @@ class StagingDB:
         self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        """老库升级：v0.1 的 records 表没有 source 列，补上（幂等）。"""
+        cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(records)").fetchall()}
+        if "source" not in cols:
+            self.conn.execute("ALTER TABLE records ADD COLUMN source TEXT NOT NULL DEFAULT 'web'")
 
     def close(self) -> None:
         self.conn.close()
@@ -88,16 +96,16 @@ class StagingDB:
 
     # ---- 入库（留痕）----
     def insert(self, *, status: str, file_name: str, file_hash: str,
-               fields: InvoiceFields, audit_notes: str = "") -> Record:
+               fields: InvoiceFields, audit_notes: str = "", source: str = "web") -> Record:
         now = _now()
         cur = self.conn.execute(
             """INSERT INTO records
                (status, file_name, file_hash, invoice_code, invoice_number,
-                category, total_amount, fields_json, audit_notes, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                category, total_amount, fields_json, audit_notes, source, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (status, file_name, file_hash, fields.invoice_code, fields.invoice_number,
              fields.category, fields.total_amount, json.dumps(fields.to_dict(), ensure_ascii=False),
-             audit_notes, now, now),
+             audit_notes, source, now, now),
         )
         self.conn.commit()
         return self.get(cur.lastrowid)  # type: ignore[return-value]
@@ -206,4 +214,5 @@ class StagingDB:
             file_hash=row["file_hash"], created_at=row["created_at"], updated_at=row["updated_at"],
             audit_notes=row["audit_notes"],
             fields=InvoiceFields(**json.loads(row["fields_json"])),
+            source=row["source"] if "source" in row.keys() else "web",
         )

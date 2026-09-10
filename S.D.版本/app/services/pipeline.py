@@ -41,7 +41,7 @@ class Pipeline:
         ]
         return sum(amounts) / len(amounts) if amounts else 0.0
 
-    def process_upload(self, image_bytes: bytes, file_name: str) -> UploadResult:
+    def process_upload(self, image_bytes: bytes, file_name: str, source: str = "web") -> UploadResult:
         logger = get_logger()
         ext = Path(file_name).suffix.lower()
         if ext not in _ALLOWED_EXT:
@@ -81,7 +81,7 @@ class Pipeline:
 
             record = self.db.insert(
                 status=status, file_name=file_name, file_hash=file_hash,
-                fields=fields, audit_notes="；".join(notes),
+                fields=fields, audit_notes="；".join(notes), source=source,
             )
             statements = self.statements()
 

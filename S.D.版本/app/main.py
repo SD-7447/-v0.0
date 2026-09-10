@@ -16,18 +16,20 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
 from .db import StagingDB
-from .routers import admin
+from .routers import admin, bot
 from .schemas import FIELD_LABELS
 from .services.exporter import export_csv, export_xlsx
 from .services.pipeline import Pipeline
 
 STATIC_DIR = Path(__file__).parent / "static"
 
-app = FastAPI(title="AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.2）")
+app = FastAPI(title="AI 中小微企业智能财务系统 · Phase 1（S.D.版本 v0.3）")
 _db = StagingDB(get_settings().db_path)
 _pipeline = Pipeline(db=_db)
 admin.bind(_db)
+bot.bind(_pipeline)
 app.include_router(admin.router)
+app.include_router(bot.router)
 
 
 @app.get("/api/health")

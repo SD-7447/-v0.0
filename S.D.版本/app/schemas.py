@@ -166,7 +166,7 @@ def _to_float(value: Any) -> Optional[float]:
 
 @dataclass
 class Record:
-    """暂存表一行记录（含留痕元数据）。status: ok / review / rejected"""
+    """暂存表一行记录（含留痕元数据）。status: ok / review / rejected；source: web / wechat"""
 
     id: int
     status: str
@@ -176,6 +176,7 @@ class Record:
     updated_at: str
     audit_notes: str
     fields: InvoiceFields = field(default_factory=InvoiceFields)
+    source: str = "web"
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
